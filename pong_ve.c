@@ -9,7 +9,7 @@ int main()
 
         extern void pingpong_init(urpc_peer_t *);
         urpc_set_handler_init_hook(&pingpong_init);
-	int rc = ve_urpc_init();
+	int rc = ve_urpc_init(0, -1);
 
 	if (rc)
 		return rc;

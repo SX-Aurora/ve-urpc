@@ -193,7 +193,7 @@ typedef void (*handler_init_hook_t)(urpc_peer_t *);
 
 #ifdef __ve__
 
-int ve_urpc_init(void);
+int ve_urpc_init(int segid, int core);
 void ve_urpc_fini(void);
 int ve_transfer_data_sync(uint64_t dst_vehva, uint64_t src_vehva, int len);
 

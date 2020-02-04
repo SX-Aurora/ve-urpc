@@ -6,6 +6,10 @@
 #include <unistd.h>
 #include <assert.h>
 #include <sys/mman.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+#include <pthread.h>
 
 #include <vhshm.h>
 #include <vedma.h>
@@ -34,9 +38,6 @@ static int vhshm_register(int segid)
 	int err = 0;
 
         shm_segid = segid;
-	printf("VE: (shm_segid = %d)\n", segid);
-
-        
 	dprintf("VE: shm_segid = %d\n", shm_segid);
 
 	//
@@ -45,7 +46,7 @@ static int vhshm_register(int segid)
 	//
         shm_remote_addr = vh_shmat(shm_segid, NULL, 0, (void **)&shm_vehva);
 	if (shm_remote_addr == NULL) {
-		eprintf("VE: (remote_addr == NULL)\n");
+		eprintf("VE: (shm_remote_addr == NULL)\n");
 		return -ENOMEM;
 	}
 	if (shm_vehva == (uint64_t)-1) {
@@ -55,8 +56,27 @@ static int vhshm_register(int segid)
 	return 0;
 }
 
+static void _pin_threads_to_cores(int core)
+{
+#ifdef _OPENMP
+#pragma omp parallel
+	{
+		int thr = omp_get_thread_num();
+		cpu_set_t set;
+		memset(&set, 0, sizeof(cpu_set_t));
+		set.__bits[0] = (1 << (thr + core));
+		pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &set);
+	}
+#else
+	cpu_set_t set;
+	memset(&set, 0, sizeof(cpu_set_t));
+	set.__bits[0] = (1 << core);
+	pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &set);
+#endif
+}
+
 // TODO: add pinning to a VE core!
-int ve_urpc_init(void)
+int ve_urpc_init(int segid, int core)
 {
 	int err = 0;
 	char *e;
@@ -69,13 +89,17 @@ int ve_urpc_init(void)
 		dprintf("ve allocated up=%p\n", (void *)up);
 
         //
-	// find shm_segid in environment
+	// shm_segid is either in argument or in environment variable
 	//
-	if ((e = getenv("URPC_SHM_SEGID")) != NULL)
-		up->shm_segid = atol(e);
-	else {
-		eprintf("ERROR: env variable URPC_SHM_SEGID not found.\n");
-		return -ENOENT;
+	if (segid) {
+		up->shm_segid = segid;
+	} else {
+		if ((e = getenv("URPC_SHM_SEGID")) != NULL)
+			up->shm_segid = atol(e);
+		else {
+			eprintf("ERROR: env variable URPC_SHM_SEGID not found.\n");
+			return -ENOENT;
+		}
 	}
 
 	// find and register shm segment, if not done, yet
@@ -94,6 +118,13 @@ int ve_urpc_init(void)
         up->recv.shm_data_vehva = shm_vehva + offsetof(transfer_queue_t, data);
         up->send.shm_data_vehva = shm_vehva + URPC_BUFF_LEN
 		+ offsetof(transfer_queue_t, data);
+
+	// pinning to VE core must happen before initializing UDMA
+	if (core < 0 && (e = getenv("URPC_VE_CORE")) != NULL) {
+		core = atoi(e);
+	}
+	if (core >= 0)
+		_pin_threads_to_cores(core);
 
 	// Initialize DMA
 	err = ve_dma_init();

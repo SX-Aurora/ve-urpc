@@ -8,7 +8,7 @@
 #include <sys/shm.h>
 #include <sys/stat.h>
 
-#include "veo_udma.h"
+//#include "veo_udma.h"
 
 /*
   Returns: the segment ID of the shm segment.
@@ -20,13 +20,13 @@ int _vh_shm_init(int key, size_t size, void **local_addr)
 	
 	int segid = shmget(key, size, IPC_CREAT | SHM_HUGETLB | S_IRWXU); 
 	if (segid == -1) {
-		eprintf("[vh_shm_init] shmget failed: %s\n", strerror(errno));
+		printf("[vh_shm_init] shmget failed: %s\n", strerror(errno));
 		return -errno;
 	}
 	*local_addr = shmat(segid, NULL, 0);
 	dprintf("local_addr: %p\n", *local_addr);
 	if (*local_addr == (void *) -1) {
-		eprintf("[vh_shm_init] shmat failed: %s\n"
+		printf("[vh_shm_init] shmat failed: %s\n"
 			"Releasing shm segment. key=%d\n", strerror(errno), key);
 		shmctl(segid, IPC_RMID, NULL);
 		segid = -errno;
@@ -42,7 +42,7 @@ int _vh_shm_fini(int segid, void *local_addr)
 	if (local_addr != (void *)-1) {
 		err = shmdt(local_addr);
 		if (err < 0) {
-			eprintf("[vh_shm_fini] Failed to detach from SHM segment %d at %p\n",
+			printf("[vh_shm_fini] Failed to detach from SHM segment %d at %p\n",
 				segid, local_addr);
 			return err;
 		}
@@ -59,7 +59,7 @@ static void _vh_shm_destroy(int segid)
 		perror("[vh_shm_destroy] Failed shmctl IPC_STAT");
 	err = shmctl(segid, IPC_RMID, &ds);
 	if (err < 0)
-		eprintf("[vh_shm_destroy] Failed to mark SHM seg ID %d destroyed\n", segid);
+		printf("[vh_shm_destroy] Failed to mark SHM seg ID %d destroyed\n", segid);
 }
 
 void vh_shm_wait_peers(int segid)

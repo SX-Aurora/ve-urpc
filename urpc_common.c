@@ -9,9 +9,6 @@
 #include "vh_shm.h"
 #endif
 
-handler_init_hook_t urpc_handler_init_hook = NULL;
-
-
 /*
   Wait for the shared memory segment to be attached by two processes.
   When done, mark the shared memory segment as destroyed.
@@ -324,24 +321,6 @@ int urpc_unregister_handler(urpc_peer_t *up, int cmd)
 		return -EINVAL;
 	up->handler[cmd] = NULL;
 	return 0;
-}
-
-/*
-  Register VH side handler init hook.
-
-  Returns 0 on success, -EEXIST if hook is in use.
-*/
-void urpc_set_handler_init_hook(void (*func)(urpc_peer_t *up))
-{
-	urpc_handler_init_hook = func;
-}
-
-/*
-  Return pointer to urdm_peer init hook function, if set.
- */
-handler_init_hook_t urpc_get_handler_init_hook(void)
-{
-	return urpc_handler_init_hook;
 }
 
 /////////////////
