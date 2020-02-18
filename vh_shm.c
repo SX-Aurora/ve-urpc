@@ -8,7 +8,7 @@
 #include <sys/shm.h>
 #include <sys/stat.h>
 
-//#include "veo_udma.h"
+#include "urpc_debug.h"
 
 /*
   Returns: the segment ID of the shm segment.
@@ -34,22 +34,6 @@ int _vh_shm_init(int key, size_t size, void **local_addr)
 	return segid;
 }
 
-int _vh_shm_fini(int segid, void *local_addr)
-{
-	int err = 0;
-
-        dprintf("vh_shm_fini segid=%d\n", segid);
-	if (local_addr != (void *)-1) {
-		err = shmdt(local_addr);
-		if (err < 0) {
-			printf("[vh_shm_fini] Failed to detach from SHM segment %d at %p\n",
-				segid, local_addr);
-			return err;
-		}
-	}
-	return err;
-}
-
 static void _vh_shm_destroy(int segid)
 {
 	int err = 0;
@@ -60,6 +44,24 @@ static void _vh_shm_destroy(int segid)
 	err = shmctl(segid, IPC_RMID, &ds);
 	if (err < 0)
 		printf("[vh_shm_destroy] Failed to mark SHM seg ID %d destroyed\n", segid);
+}
+
+int _vh_shm_fini(int segid, void *local_addr)
+{
+	int err = 0;
+
+        dprintf("vh_shm_fini segid=%d\n", segid);
+	if (local_addr != (void *)-1) {
+		// make SURE the shm is destroyed
+		_vh_shm_destroy(segid);
+		err = shmdt(local_addr);
+		if (err < 0) {
+			printf("[vh_shm_fini] Failed to detach from SHM segment %d at %p\n",
+				segid, local_addr);
+			return err;
+		}
+	}
+	return err;
 }
 
 void vh_shm_wait_peers(int segid)

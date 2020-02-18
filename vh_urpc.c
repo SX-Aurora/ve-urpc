@@ -12,6 +12,7 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/stat.h>
+#include <signal.h>
 
 #include "vh_shm.h"
 #include "urpc_common.h"
@@ -125,7 +126,8 @@ int vh_urpc_peer_destroy(int peer_id)
 
   Return 0 if all went well, -errno if not.
  */
-int vh_urpc_child_create(urpc_peer_t *up, char *binary, int venode_id, int ve_core)
+int vh_urpc_child_create(urpc_peer_t *up, char *binary,
+                         int venode_id, int ve_core)
 {
 	int err;
 
@@ -167,4 +169,15 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary, int venode_id, int ve_co
 		return -errno;
 	}
 	return 0;
+}
+
+int vh_urpc_child_destroy(urpc_peer_t *up)
+{
+	int rc = -ENOENT;
+
+	if (up->child_pid > 0) {
+		rc = kill(up->child_pid, SIGKILL);
+		up->child_pid = -1;
+	}
+	return rc;
 }

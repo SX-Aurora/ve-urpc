@@ -25,7 +25,7 @@ void *shm_remote_addr = NULL;	// remote address
 //__thread int this_peer = -1;			// local peer ID
 //__thread struct ve_udma_peer *udma_peer;	// this peer's UDMA comm struct
 
-urpc_peer_t *up;
+urpc_peer_t ve_local_up_;
 
 /*
   Initialize VH-SHM segment, map it as VEHVA.
@@ -78,15 +78,9 @@ static void _pin_threads_to_cores(int core)
 // TODO: add pinning to a VE core!
 int ve_urpc_init(int segid, int core)
 {
+	urpc_peer_t *up = &ve_local_up_;
 	int err = 0;
 	char *e;
-
-	up = (urpc_peer_t *)malloc(sizeof(urpc_peer_t));
-	if (up == NULL) {
-		eprintf("VE: malloc failed for peer struct.\n");
-		err = -ENOMEM;
-	} else
-		dprintf("ve allocated up=%p\n", (void *)up);
 
         //
 	// shm_segid is either in argument or in environment variable
@@ -174,6 +168,7 @@ int ve_urpc_init(int segid, int core)
 
 void ve_urpc_fini(void)
 {
+	urpc_peer_t *up = &ve_local_up_;
 	int err;
 
 	// unregister local buffer from DMAATB

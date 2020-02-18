@@ -8,6 +8,8 @@
 #include <string.h>
 #include <pthread.h>
 
+#include "urpc_debug.h"
+
 /* maximum number of peer currently limited to 64 = 8 VEs * 10 cores */
 #define URPC_MAX_PEERS 64
 /* the length of the mailbox MUST be a power of 2! */
@@ -49,14 +51,6 @@
 # define TQ_WRITE32(var,val) (var) = (val)
 # define TQ_FENCE()
 #endif
-
-//#define DEBUG 1
-#ifdef DEBUG
-#define dprintf(args...) printf(args)
-#else
-#define dprintf(args...)
-#endif
-#define eprintf(args...) fprintf(stderr, args)
 
 /*
   Communication buffer(s) layout in shared memory:
@@ -125,6 +119,11 @@ union urpc_mb {
 		uint64_t offs : URPC_OFFSET_BITS;	// payload offset in buffer
 		uint64_t  len : URPC_PAYLOAD_BITS;	// length of fragment
 	} c;
+	struct {
+		uint64_t  cmd : URPC_CMD_BITS;		// RPC command
+		uint64_t dummy : 32 - URPC_CMD_BITS;
+		int32_t   res : 32;			// 32 bit integer reply
+	} short_reply;
 };
 typedef union urpc_mb urpc_mb_t;
 	
@@ -172,11 +171,11 @@ typedef struct urpc_peer urpc_peer_t;
   Arguments:
   urpc peer
   pointer to command/mailbox
-  slot number
+  request ID
   pointer to payload buffer
   payload length
  */
-typedef int (*urpc_handler_func)(urpc_peer_t *, urpc_mb_t *, int, void *, size_t);
+typedef int (*urpc_handler_func)(urpc_peer_t *, urpc_mb_t *, int64_t, void *, size_t);
 	
 struct urpc_peer {
 	urpc_comm_t send;
@@ -184,6 +183,7 @@ struct urpc_peer {
 	int shm_key, shm_segid;
 	size_t shm_size;
 	void *shm_addr;
+	int shm_destroyed;
 	pthread_mutex_t lock;
 	pid_t child_pid;
 	urpc_handler_func handler[256];
@@ -201,7 +201,9 @@ int ve_transfer_data_sync(uint64_t dst_vehva, uint64_t src_vehva, int len);
 
 int vh_urpc_peer_create(void);
 int vh_urpc_peer_destroy(int peer_id);
-int vh_urpc_child_create(urpc_peer_t *up, char *binary, int venode_id, int ve_core);
+int vh_urpc_child_create(urpc_peer_t *up, char *binary,
+                         int venode_id, int ve_core);
+int vh_urpc_child_destroy(urpc_peer_t *up);
 urpc_peer_t *vh_urpc_peer_get(int peer_id);
 
 #endif
@@ -211,9 +213,12 @@ void urpc_set_receiver_flags(urpc_comm_t *uc, uint32_t flags);
 void urpc_set_sender_flags(urpc_comm_t *uc, uint32_t flags);
 uint32_t urpc_get_receiver_flags(urpc_comm_t *uc);
 uint32_t urpc_get_sender_flags(urpc_comm_t *uc);
-int urpc_get_cmd(transfer_queue_t *tq, urpc_mb_t *m);
+int64_t urpc_get_cmd(transfer_queue_t *tq, urpc_mb_t *m);
 int64_t urpc_put_cmd(urpc_peer_t *up, urpc_mb_t *m);
 int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...);
+int urpc_unpack_payload(void *payload, size_t psz, char *fmt, ...);
+int urpc_recv_req_timeout(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
+                          long timeout_us, void **payload, size_t *plen);
 int urpc_recv_progress(urpc_peer_t *up, int ncmds);
 int urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us);
 int urpc_register_handler(urpc_peer_t *up, int cmd, urpc_handler_func handler);

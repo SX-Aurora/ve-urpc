@@ -11,13 +11,16 @@ VELIB_OBJS_OMP =  init_hook_ve.o ve_urpc_omp.o urpc_common_ve.o
 ALL: liburpc_vh.so liburpc_ve.so liburpc_ve_omp.so ping_vh pong_ve
 
 liburpc_vh.so: $(VHLIB_OBJS)
-	$(GCC) $(GCCFLAGS) -shared -o $@ $<
+	$(GCC) $(GCCFLAGS) -shared -o $@ $^
+#	$(GCC) $(GCCFLAGS) -Wl,--version-script=liburpc_vh.map -shared -o $@ $^
 
 liburpc_ve.so: $(VELIB_OBJS)
-	$(NCC) -v -Wl,-zdefs $(NCCFLAGS) -shared -o $@ $< -lveio
+	$(NCC) -v -Wl,-zdefs $(NCCFLAGS) -shared -o $@ $^ -lveio
+#	$(NCC) -v -Wl,-zdefs -Wl,--version-script=liburpc_ve.map $(NCCFLAGS) -shared -o $@ $^ -lveio
 
 liburpc_ve_omp.so: $(VELIB_OBJS_OMP)
-	$(NCC) -Wl,-zdefs $(NCCFLAGS) -shared -fopenmp -o $@ $< -lveio
+	$(NCC) -Wl,-zdefs $(NCCFLAGS) -shared -fopenmp -o $@ $^ -lveio
+#	$(NCC) -Wl,-zdefs -Wl,--version-script=liburpc_ve.map $(NCCFLAGS) -shared -fopenmp -o $@ $< -lveio
 
 # VH objects below
 
