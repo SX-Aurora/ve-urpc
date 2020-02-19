@@ -214,8 +214,10 @@ void urpc_set_sender_flags(urpc_comm_t *uc, uint32_t flags);
 uint32_t urpc_get_receiver_flags(urpc_comm_t *uc);
 uint32_t urpc_get_sender_flags(urpc_comm_t *uc);
 int64_t urpc_get_cmd(transfer_queue_t *tq, urpc_mb_t *m);
+int64_t urpc_get_cmd_timeout(transfer_queue_t *tq, urpc_mb_t *m, long timeout_us);
 int64_t urpc_put_cmd(urpc_peer_t *up, urpc_mb_t *m);
 int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...);
+void urpc_slot_done(transfer_queue_t *tq, int slot, urpc_mb_t *m);
 int urpc_unpack_payload(void *payload, size_t psz, char *fmt, ...);
 int urpc_recv_req_timeout(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
                           long timeout_us, void **payload, size_t *plen);
