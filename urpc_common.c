@@ -123,25 +123,42 @@ void urpc_set_sender_flags(urpc_comm_t *uc, uint32_t flags)
 /*
   Pull next command from the transfer queue.
 
-  Returns: req_id for cmd or -1
+  Returns: req ID for cmd or -1
  */
 int64_t urpc_get_cmd(transfer_queue_t *tq, urpc_mb_t *m)
 {
 	int slot;
-        int64_t req_id = -1;
+        int64_t req = -1;
 	int64_t last_put = TQ_READ64(tq->last_put_req);
 	int64_t last_get = TQ_READ64(tq->last_get_req);
 
 	TQ_FENCE();
 	if (last_put != last_get) {
-		req_id = last_get + 1;
-		slot = REQ2SLOT(req_id);
+		req = last_get + 1;
+		slot = REQ2SLOT(req);
 		m->u64 = TQ_READ64(tq->mb[slot].u64);
-		dprintf("urpc_get_cmd cmd=%u offs=%u len=%u\n", m->c.cmd, m->c.offs, m->c.len);
-		TQ_WRITE64(tq->last_get_req, req_id);
+		dprintf("urpc_get_cmd req=%ld cmd=%u offs=%u len=%u\n",
+                        req, m->c.cmd, m->c.offs, m->c.len);
+		TQ_WRITE64(tq->last_get_req, req);
 		TQ_FENCE();
 	}
-	return req_id;
+	return req;
+}
+
+/*
+  Wait for a request, with timeout.
+
+  Return request ID if ok, -1 if failed.
+*/
+int64_t urpc_get_cmd_timeout(transfer_queue_t *tq, urpc_mb_t *m, long timeout_us)
+{
+	int64_t res;
+
+	long done_ts = get_time_us();
+
+	while (((res = urpc_get_cmd(tq, m)) == -1) &&
+	       timediff_us(done_ts) < timeout_us);
+	return res;
 }
 
 /*
@@ -152,7 +169,6 @@ int64_t urpc_get_cmd(transfer_queue_t *tq, urpc_mb_t *m)
 int64_t urpc_get_req(transfer_queue_t *tq, urpc_mb_t *m, int64_t req)
 {
 	int slot;
-        int64_t req_id = -1;
 	int64_t last_put = TQ_READ64(tq->last_put_req);
 	int64_t last_get = TQ_READ64(tq->last_get_req);
 
@@ -165,13 +181,15 @@ int64_t urpc_get_req(transfer_queue_t *tq, urpc_mb_t *m, int64_t req)
 	if (last_put >= req) {
 		slot = REQ2SLOT(req);
 		m->u64 = TQ_READ64(tq->mb[slot].u64);
-		dprintf("urpc_get_req cmd=%u offs=%u len=%u\n", m->c.cmd, m->c.offs, m->c.len);
+		dprintf("urpc_get_req req=%ld cmd=%u offs=%u len=%u\n",
+                        req, m->c.cmd, m->c.offs, m->c.len);
 		if (last_get + 1 == req) {	
 			TQ_WRITE64(tq->last_get_req, req);
 			TQ_FENCE();
 		}
+                return req;
 	}
-	return req;
+	return -1;
 }
 
 /*
@@ -182,7 +200,7 @@ int64_t urpc_get_req(transfer_queue_t *tq, urpc_mb_t *m, int64_t req)
 
   Returns: slot for cmd or -1
  */
-static void _slot_done(transfer_queue_t *tq, int slot, urpc_mb_t *m)
+void urpc_slot_done(transfer_queue_t *tq, int slot, urpc_mb_t *m)
 {
 	m->c.cmd = URPC_CMD_NONE;
         TQ_FENCE();
@@ -208,10 +226,10 @@ int64_t urpc_put_cmd(urpc_peer_t *up, urpc_mb_t *m)
 	transfer_queue_t *tq = uc->tq;
 	int slot = -1;
 	urpc_mb_t next;
-	int64_t req_id = TQ_READ64(tq->last_put_req) + 1;
+	int64_t req = TQ_READ64(tq->last_put_req) + 1;
 
 	TQ_FENCE();
-	slot = REQ2SLOT(req_id);
+	slot = REQ2SLOT(req);
 	do {
 		next.u64 = TQ_READ64(tq->mb[slot].u64);
 		TQ_FENCE();
@@ -233,8 +251,10 @@ int64_t urpc_put_cmd(urpc_peer_t *up, urpc_mb_t *m)
 		ml->u64 = 0;
 
 	TQ_WRITE64(tq->mb[slot].u64, m->u64);
-	TQ_WRITE64(tq->last_put_req, req_id);
-	return req_id;
+	TQ_WRITE64(tq->last_put_req, req);
+        dprintf("urpc_put_cmd req=%ld cmd=%u offs=%u len=%u\n",
+                req, m->c.cmd, m->c.offs, m->c.len);
+	return req;
 }
 
 
@@ -324,8 +344,8 @@ int urpc_recv_progress(urpc_peer_t *up, int ncmds)
 
 	// TODO: aggregate contiguous payload buffers
 	while (done < ncmds) {
-		int64_t req_id = urpc_get_cmd(tq, &m);
-		if (req_id < 0)
+		int64_t req = urpc_get_cmd(tq, &m);
+		if (req < 0)
 			break;
 		//
 		// set/receive payload, if needed
@@ -336,13 +356,13 @@ int urpc_recv_progress(urpc_peer_t *up, int ncmds)
 		//
 		func = up->handler[m.c.cmd];
 		if (func) {
-			err = func(up, &m, req_id, payload, plen);
+			err = func(up, &m, req, payload, plen);
 			if (err)
 				eprintf("Warning: RPC handler %d returned %d\n",
 					m.c.cmd, err);
 		}
 
-		_slot_done(tq, REQ2SLOT(req_id), &m);
+		urpc_slot_done(tq, REQ2SLOT(req), &m);
 		++done;
 	}
 	return done;
@@ -460,10 +480,12 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
 	}
 	size = ALIGN8B(size);
 	va_end(ap1);
+        dprintf("generic_send allocating %ld bytes payload\n", size);
 	if (size) {
 		// allocate payload on data buffer
 		mb.u64 = _alloc_payload(uc, (uint32_t)size);
 		if (mb.u64 == 0) {
+			dprintf("generic_send: failed to allocate payload\n");
 			eprintf("ERROR: urpc_alloc_payload failed!");
 			return -ENOMEM;
 		}

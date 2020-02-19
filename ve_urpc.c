@@ -75,6 +75,13 @@ static void _pin_threads_to_cores(int core)
 #endif
 }
 
+static void ve_urpc_comm_init(urpc_comm_t *uc)
+{
+	uc->free_begin = 0;
+	uc->free_end = URPC_DATA_BUFF_LEN;
+        pthread_mutex_init(&uc->lock, NULL);
+}
+
 // TODO: add pinning to a VE core!
 int ve_urpc_init(int segid, int core)
 {
@@ -112,6 +119,8 @@ int ve_urpc_init(int segid, int core)
         up->recv.shm_data_vehva = shm_vehva + offsetof(transfer_queue_t, data);
         up->send.shm_data_vehva = shm_vehva + URPC_BUFF_LEN
 		+ offsetof(transfer_queue_t, data);
+
+	ve_urpc_comm_init(&up->send);
 
 	// pinning to VE core must happen before initializing UDMA
 	if (core < 0 && (e = getenv("URPC_VE_CORE")) != NULL) {
@@ -160,8 +169,10 @@ int ve_urpc_init(int segid, int core)
 	for (int i = 0; i <= URPC_MAX_HANDLERS; i++)
 		up->handler[i] = NULL;
 	handler_init_hook_t hook = urpc_get_handler_init_hook();
-	if (hook)
+	if (hook) {
+		dprintf("running handler init hook\n");
 		hook(up);
+        }
 
 	return 0;
 }
