@@ -162,22 +162,6 @@ int64_t urpc_get_cmd_timeout(transfer_queue_t *tq, urpc_mb_t *m, long timeout_us
 }
 
 /*
-  Wait for a request, with timeout.
-
-  Return request ID if ok, -1 if failed.
-*/
-int64_t urpc_get_cmd_timeout(transfer_queue_t *tq, urpc_mb_t *m, long timeout_us)
-{
-	int64_t res;
-
-	long done_ts = get_time_us();
-
-	while (((res = urpc_get_cmd(tq, m)) == -1) &&
-	       timediff_us(done_ts) < timeout_us);
-	return res;
-}
-
-/*
   Pull a certain command from the transfer queue, specified by req.
 
   Returns: req if successful or -1 if not.
