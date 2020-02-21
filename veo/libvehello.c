@@ -16,3 +16,8 @@ uint64_t print_buffer()
   fflush(stdout);
   return 1;
 }
+
+uint64_t empty(void)
+{
+  return 0;
+}

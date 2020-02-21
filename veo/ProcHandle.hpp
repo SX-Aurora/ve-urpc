@@ -13,6 +13,7 @@
 #include "ve_offload.h"
 #include <urpc_common.h>
 //#include <veorun.h>
+#include "CallArgs.hpp"
 //#include "ThreadContext.hpp"
 #include "VEOException.hpp"
 
@@ -38,11 +39,12 @@ private:
   std::mutex main_mutex;//!< acquire while using main_thread
   int peer_id;		//!< ve-urpc peer ID
   urpc_peer_t *up;	//!< ve-urpc peer pointer
+  uint64_t ve_sp;       //!< stack pointer on VE side
   int ve_number;
 
 public:
   ProcHandle(int, char *);
-  ~ProcHandle();
+  ~ProcHandle() { if (this->ve_number >= 0) this->exitProc(); }
 
   uint64_t loadLibrary(const char *);
   uint64_t getSym(const uint64_t, const char *);
@@ -53,6 +55,8 @@ public:
   int readMem(void *, uint64_t, size_t);
   int writeMem(uint64_t, const void *, size_t);
   int exitProc(void);
+
+  int callSync(uint64_t, CallArgs &, uint64_t *);
 
   //ThreadContext *openContext();
   

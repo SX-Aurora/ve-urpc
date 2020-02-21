@@ -20,46 +20,33 @@ extern "C" {
 //
 enum veo_urpc_cmd
 {
-	URPC_CMD_NONE_     =  0,
-	URPC_CMD_PING      =  1,
-	URPC_CMD_EXIT      =  2,
-	URPC_CMD_ACK       =  3, // ACK is a result with no (void) content
-	URPC_CMD_RESULT    =  4, // result (int64_t) without cache
-	URPC_CMD_RESCACHE  =  5, // result with cache
-	URPC_CMD_LOADLIB   =  6, // load .so
-	URPC_CMD_UNLOADLIB =  7, // unload .so
-	URPC_CMD_GETSYM    =  8, // find symbol in .so
-	URPC_CMD_ALLOC     =  9, // allocate buffer on VE
-	URPC_CMD_FREE      = 10, // free buffer on VE
-	URPC_CMD_SENDBUFF  = 11, 
-	URPC_CMD_RECVBUFF  = 12,
-	URPC_CMD_SENDFRAG  = 13,
-	URPC_CMD_NEWPEER   = 14,
-	URPC_CMD_CALL      = 15,
-	URPC_CMD_SLEEPING  = 16  // notify peer that we're going to sleep
+	URPC_CMD_NONE_         =  0,
+	URPC_CMD_PING          =  1,
+	URPC_CMD_EXIT          =  2,
+	URPC_CMD_ACK           =  3, // ACK is a result with no (void) content
+	URPC_CMD_RESULT        =  4, // result (int64_t) without cache
+	URPC_CMD_RESCACHE      =  5, // result with cache
+	URPC_CMD_LOADLIB       =  6, // load .so
+	URPC_CMD_UNLOADLIB     =  7, // unload .so
+	URPC_CMD_GETSYM        =  8, // find symbol in .so
+	URPC_CMD_ALLOC         =  9, // allocate buffer on VE
+	URPC_CMD_FREE          = 10, // free buffer on VE
+	URPC_CMD_SENDBUFF      = 11, 
+	URPC_CMD_RECVBUFF      = 12,
+	URPC_CMD_SENDFRAG      = 13,
+	URPC_CMD_CALL          = 14, // simple call with no stack transfer
+	URPC_CMD_CALL_STKIN    = 15, // call with stack "IN" only
+	URPC_CMD_CALL_STKINOUT = 16, // call with stack IN and OUT
+	URPC_CMD_SLEEPING      = 17, // notify peer that we're going to sleep
+	URPC_CMD_NEWPEER       = 18  // create new remote peer (AKA context) inside same proc
 };
 
-#if 0
-	char *cmd_name[] = {
-	"NONE",
-	"PING",
-	"EXIT",
-	"ACK",
-	"RESULT",
-	"RESCACHE",
-	"LOADLIB",
-	"UNLOADLIB",
-	"GETSYM",
-	"ALLOC",
-	"FREE",
-	"SENDBUFF",
-	"RECVBUFF",
-	"SENDFRAG",
-	"NEWPEER",
-	"CALL",
-	"SLEEPING"
-	};
-#endif
+enum veo_urpc_call_flags
+{
+	VEO_CALL_NO_CACHE  = 0,
+	VEO_CALL_CACHE_IN  = 1,
+	VEO_CALL_CACHE_OUT = 2
+};
 
 static inline int64_t send_cmd_nopayload(urpc_peer_t *up, enum veo_urpc_cmd cmd)
 {

@@ -5,7 +5,7 @@
 #include "ProcHandle.hpp"
 //#include "ThreadContext.hpp"
 #include "VEOException.hpp"
-//#include "CallArgs.hpp"
+#include "CallArgs.hpp"
 #include "log.hpp"
 
 #include "veo_urpc.h"
@@ -26,7 +26,7 @@ namespace veo {
  * @param venode VE node ID for running child peer
  * @param binname VE executable
  */
-ProcHandle::ProcHandle(int venode, char *binname)
+ProcHandle::ProcHandle(int venode, char *binname) : ve_number(-1)
 {
   // create vh side peer
   this->peer_id = vh_urpc_peer_create();
@@ -41,6 +41,15 @@ ProcHandle::ProcHandle(int venode, char *binname)
     throw VEOException("ProcHandle: failed to create VE process.");
   }
   wait_peer_attach(this->up);
+
+  // TODO: FIXME, the sp must come from inside the kernel call handler!
+  CallArgs args;
+  auto rc = this->callSync(0, args, &this->ve_sp);
+  if (rc < 0) {
+    throw VEOException("ProcHandle: failed to get the VE SP.");
+  }
+  dprintf("proc stack pointer: %p\n", (void *)this->ve_sp);
+
   this->ve_number = venode;
 }
 
@@ -68,10 +77,11 @@ int ProcHandle::exitProc()
       VEO_ERROR(nullptr, "failed to destroy VE child (rc=%d)", rc);
     }
   }
-  return vh_urpc_peer_destroy(this->peer_id);
+  rc = vh_urpc_peer_destroy(this->peer_id);
+  this->ve_number = -1;
+  return rc;
 }
 
-  
 /**
  * @brief Load a VE library in VE process space
  *
@@ -276,6 +286,89 @@ int ProcHandle::writeMem(uint64_t dst, const void *src, size_t size)
     if (pickup_acks(this->up, acks) != 0)
       return -1;
   return 0;
+}
+
+/**
+ * @brief start a function on the VE, wait for result and return it.
+ *
+ * @param addr VEMVA of function called
+ * @param args arguments of the function
+ * @param result pointer to result
+ * @return 0 if all went well.
+ */
+int ProcHandle::callSync(uint64_t addr, CallArgs &args, uint64_t *result)
+{
+  VEO_TRACE(nullptr, "%s(%#lx, ...)", __func__, addr);
+  VEO_DEBUG(nullptr, "VE function = %p", (void *)addr);
+
+  args.setup(this->ve_sp);
+
+  void *stack_buf = (void *)args.stack_buf.get();
+  
+  auto regs = args.getRegVal(this->ve_sp);
+  VEO_ASSERT(regs.size() <= NUM_ARGS_ON_REGISTER);
+  size_t regs_sz = regs.size() * sizeof(uint64_t);
+
+  int64_t req;
+  int rc;
+
+  if (!(args.copied_in || args.copied_out)) {
+    // no stack transfer
+    // transfered data: addr, regs array
+    
+    req = urpc_generic_send(this->up, URPC_CMD_CALL, (char *)"LP",
+                            addr, (void *)regs.data(), regs_sz);
+
+  } else if (args.copied_in && !args.copied_out) {
+    // stack copied IN only
+    // transfered data: addr, regs array, stack_top, stack_pointer, stack_image
+    
+    req = urpc_generic_send(this->up, URPC_CMD_CALL_STKIN, (char *)"LPLLP",
+                            addr, (void *)regs.data(), regs_sz,
+                            args.stack_top, this->ve_sp,
+                            stack_buf, args.stack_size);
+
+    dprintf("callSync: stack IN, nregs=%d, stack_top=%p, sp=%p, stack_size=%d\n",
+            regs_sz/8, (void *)args.stack_top, (void *)this->ve_sp, args.stack_size);
+  } else if (args.copied_out) {
+    // stack transfered into VE, too, even though only copy out is needed
+    // transfered data: addr, regs array, stack_top, stack_pointer, stack_image
+
+    req = urpc_generic_send(this->up, URPC_CMD_CALL_STKINOUT, (char *)"LPLLP",
+                            addr, (void *)regs.data(), regs_sz,
+                            args.stack_top, this->ve_sp,
+                            stack_buf, args.stack_size);
+    dprintf("callSync: stack INOUT, nregs=%d, stack_top=%p, sp=%p, stack_size=%d\n",
+            regs_sz/8, (void *)args.stack_top, (void *)this->ve_sp, args.stack_size);
+  }
+
+  urpc_mb_t m;
+  void *payload;
+  size_t plen;
+  if (!urpc_recv_req_timeout(up, &m, req, 150*REPLY_TIMEOUT, &payload, &plen)) {
+    // timeout! complain.
+    eprintf("callSync timeout waiting for RESULT req=%ld\n", req);
+    return -1;
+  }
+  if (m.c.cmd == URPC_CMD_RESULT) {
+    if (plen) {
+      rc =urpc_unpack_payload(payload, plen, (char *)"L", (int64_t *)result);
+      urpc_slot_done(this->up->recv.tq, REQ2SLOT(req), &m);
+    } else {
+      eprintf("result message for req=%ld had no payload!?", req);
+    }
+  } else if (m.c.cmd == URPC_CMD_RESCACHE) {
+    rc = urpc_unpack_payload(payload, plen, (char *)"LP", (int64_t *)result,
+                             &stack_buf, &args.stack_size);
+    if (rc == 0)
+      args.copyout();
+  } else {
+    eprintf("callSync: expected RESULT or RESCACHE, got cmd=%d\n", m.c.cmd);
+    rc = -3;
+  }
+  urpc_slot_done(this->up->recv.tq, REQ2SLOT(req), &m);
+
+  return rc;
 }
 
 #if 0

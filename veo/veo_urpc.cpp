@@ -354,6 +354,161 @@ static int writemem_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
 }
 
 #ifdef __ve__
+
+static int call_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
+			void *payload, size_t plen)
+{
+	void *stack = NULL;
+	size_t stack_size = 0;
+	uint64_t stack_top, recv_sp = 0, curr_sp;
+	uint64_t addr = 0;
+	uint64_t *regs, result;
+	size_t nregs;
+	int flags;
+	
+	asm volatile ("or %0, 0, %sp": "=r"(curr_sp));
+
+	if (m->c.cmd == URPC_CMD_CALL) {
+		flags = 0;
+		urpc_unpack_payload(payload, plen, (char *)"LP", &addr, (void **)&regs, &nregs);
+		nregs = nregs / 8;
+
+		//
+		// if addr == 0: send current stack pointer
+		//
+		if (addr == 0) {
+			int64_t new_req = send_result_nolock(up, curr_sp);
+			if (new_req != req || new_req < 0) {
+				eprintf("call_handler sp send failed, req mismatch.\n");
+				return -1;
+			}
+			return 0;
+		}
+                dprintf("call_handler: no stack, nregs=%d\n", nregs);
+
+	} else if (m->c.cmd == URPC_CMD_CALL_STKIN ||
+		   m->c.cmd == URPC_CMD_CALL_STKINOUT) {
+		flags |= VEO_CALL_CACHE_IN;
+	} else if (m->c.cmd == URPC_CMD_CALL_STKINOUT) {
+		flags |= VEO_CALL_CACHE_OUT;
+	}
+	if (flags & VEO_CALL_CACHE_IN) {
+		urpc_unpack_payload(payload, plen, (char *)"LPLLP",
+				    &addr, (void **)&regs, &nregs,
+				    &stack_top, &recv_sp,
+				    &stack, &stack_size);
+		nregs = nregs / 8;
+                dprintf("call_handler: stack IN, nregs=%d, stack_top=%p\n",
+                        nregs, (void *)stack_top);
+	}
+	//
+	// check if sent stack pointer is the same as the current one
+	//
+	asm volatile ("or %0, 0, %sp": "=r"(curr_sp));
+
+	if (recv_sp && recv_sp != curr_sp) {
+		eprintf("call_handler stack pointer mismatch! "
+                        "curr=%p expected=%p\n", curr_sp, recv_sp);
+		return -1;
+	}
+	//
+	// prepare "fake" stack for current function, which enables us to pass
+	// parameters and variables that look like local variables on this
+	// function's stack.
+	//
+	if (flags & VEO_CALL_CACHE_IN) {
+		memcpy((void *)stack_top, stack, stack_size);
+	}
+	//
+	// set up registers
+	//
+#define SREG(N,V) asm volatile ("or %s" #N ", 0, %0"::"r"(V))
+	if (nregs == 1) {
+		SREG(0,regs[0]);
+	} else if (nregs == 2) {
+		SREG(0,regs[0]); SREG(1,regs[1]);
+	} else if (nregs == 3) {
+		SREG(0,regs[0]); SREG(1,regs[1]); SREG(2,regs[2]);
+	} else if (nregs == 4) {
+		SREG(0,regs[0]); SREG(1,regs[1]); SREG(2,regs[2]); SREG(3,regs[3]);
+	} else if (nregs == 5) {
+		SREG(0,regs[0]); SREG(1,regs[1]); SREG(2,regs[2]); SREG(3,regs[3]);
+		SREG(4,regs[4]);
+	} else if (nregs == 6) {
+		SREG(0,regs[0]); SREG(1,regs[1]); SREG(2,regs[2]); SREG(3,regs[3]);
+		SREG(4,regs[4]); SREG(5,regs[5]);
+	} else if (nregs == 7) {
+		SREG(0,regs[0]); SREG(1,regs[1]); SREG(2,regs[2]); SREG(3,regs[3]);
+		SREG(4,regs[4]); SREG(5,regs[5]); SREG(6,regs[6]);
+	} else if (nregs >= 8) {
+		SREG(0,regs[0]); SREG(1,regs[1]); SREG(2,regs[2]); SREG(3,regs[3]);
+		SREG(4,regs[4]); SREG(5,regs[5]); SREG(6,regs[6]); SREG(7,regs[7]);
+	}
+#undef SREG
+	//
+	// And now we call the function!
+	//
+	if (flags == 0) {
+		asm volatile("or %s12, 0, %0\n\t"          /* target function address */
+			     ::"r"(addr));
+		asm volatile("bsic %lr, (,%s12)":::);
+	} else {
+		asm volatile("or %s12, 0, %0\n\t"          /* target function address */
+			     "st %fp, 0x0(,%sp)\n\t"       /* save original fp */
+			     "st %lr, 0x8(,%sp)\n\t"       /* fake prologue */
+			     "st %got, 0x18(,%sp)\n\t"
+			     "st %plt, 0x20(,%sp)\n\t"
+			     "or %fp, 0, %sp\n\t"          /* switch fp to new frame */
+			     "or %sp, 0, %1"               /* switch sp to new frame */
+			     ::"r"(addr), "r"(stack_top));
+		asm volatile("bsic %lr, (,%s12)":::);
+		asm volatile("or %sp, 0, %fp\n\t"          /* restore original sp */
+			     "ld %fp, 0x0(,%sp)"           /* restore original fp */
+			     :::);
+	}
+	asm volatile("or %0, 0, %s0":"=r"(result));
+
+	if (flags & VEO_CALL_CACHE_OUT) {
+		// copying back from stack must happen in the same function,
+		// otherwise we overwrite it!
+#pragma _NEC ivdep
+		for (int i = 0; i < stack_size / 8; i++) {
+			((uint64_t *)stack)[i] = ((uint64_t *)stack_top)[i];
+		}
+		int64_t new_req = urpc_generic_send(up, URPC_CMD_RESCACHE, (char *)"LP",
+						    result, stack, stack_size);
+		if (new_req != req || new_req < 0) {
+			eprintf("call_handler sp send failed, req mismatch.\n");
+			return -1;
+		}
+	} else {
+		int64_t new_req = send_result_nolock(up, result);
+		if (new_req != req || new_req < 0) {
+			eprintf("call_handler: send result failed\n");
+			return -1;
+		}
+	}
+	return 0;
+}
+
+
+static int get_sp_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
+			  void *payload, size_t plen)
+{
+	int64_t sp;
+
+	asm volatile ("or %0, 0, %sp": "=r"(sp));
+
+	int64_t new_req = send_result_nolock(up, sp);
+	if (new_req != req || new_req < 0) {
+		eprintf("get_sp_handler: send result failed\n");
+		return -1;
+	}
+	return 0;
+}
+#endif
+
+#ifdef __ve__
 void veo_urpc_register_ve_handlers(urpc_peer_t *up)
 {
 	int err;
@@ -375,6 +530,12 @@ void veo_urpc_register_ve_handlers(urpc_peer_t *up)
 	if ((err = urpc_register_handler(up, URPC_CMD_RECVBUFF, &readmem_handler)) < 0)
 		eprintf("register_handler failed for cmd %d\n", 1);
 	if ((err = urpc_register_handler(up, URPC_CMD_SENDBUFF, &writemem_handler)) < 0)
+		eprintf("register_handler failed for cmd %d\n", 1);
+	if ((err = urpc_register_handler(up, URPC_CMD_CALL, &call_handler)) < 0)
+		eprintf("register_handler failed for cmd %d\n", 1);
+	if ((err = urpc_register_handler(up, URPC_CMD_CALL_STKIN, &call_handler)) < 0)
+		eprintf("register_handler failed for cmd %d\n", 1);
+	if ((err = urpc_register_handler(up, URPC_CMD_CALL_STKINOUT, &call_handler)) < 0)
 		eprintf("register_handler failed for cmd %d\n", 1);
 }
 #endif

@@ -1,8 +1,8 @@
 NCC = /opt/nec/ve/bin/ncc
 GCC = gcc
 DEBUG = -g
-GCCFLAGS = --std=c11 -fpic -pthread -D_SVID_SOURCE -O0 $(DEBUG)
-NCCFLAGS = -pthread -fpic -O0 $(DEBUG)
+GCCFLAGS = --std=c11 -fpic -pthread -D_SVID_SOURCE -O3 $(DEBUG)
+NCCFLAGS = -pthread -fpic -O3 $(DEBUG)
 
 VHLIB_OBJS = init_hook_vh.o vh_shm.o vh_urpc.o urpc_common_vh.o
 VELIB_OBJS = init_hook_ve.o ve_urpc.o urpc_common_ve.o

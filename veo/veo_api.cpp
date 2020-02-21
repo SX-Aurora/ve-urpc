@@ -10,7 +10,7 @@
 #include <cstddef>
 
 #include "ProcHandle.hpp"
-//#include "CallArgs.hpp"
+#include "CallArgs.hpp"
 #include "VEOException.hpp"
 #include "log.hpp"
 
@@ -20,13 +20,13 @@ ProcHandle *ProcHandleFromC(veo_proc_handle *h)
 {
   return reinterpret_cast<ProcHandle *>(h);
 }
-#if 0
+
 CallArgs *CallArgsFromC(veo_args *a)
 {
   return reinterpret_cast<CallArgs *>(a);
 }
 
-  template <typename T> int veo_args_set_(veo_args *ca, int argnum, T val)
+template <typename T> int veo_args_set_(veo_args *ca, int argnum, T val)
 {
   try {
     CallArgsFromC(ca)->set(argnum, val);
@@ -37,13 +37,12 @@ CallArgs *CallArgsFromC(veo_args *a)
     return -1;
   }
 }
-#endif /* 0 */
 } // namespace veo::api
 } // namespace veo
 
 using veo::api::ProcHandleFromC;
-//using veo::api::CallArgsFromC;
-//using veo::api::veo_args_set_;
+using veo::api::CallArgsFromC;
+using veo::api::veo_args_set_;
 using veo::VEOException;
 
 veo_proc_handle *veo_proc_create_static(int venode, char *veobin)
@@ -288,6 +287,7 @@ uint64_t veo_async_write_mem(veo_thr_ctxt *ctx, uint64_t dst, const void *src,
     return VEO_REQUEST_ID_INVALID;
   }
 }
+#endif /* 0 */
 
 /**
  * @brief allocate VEO arguments object (veo_args)
@@ -487,5 +487,26 @@ void veo_args_free(veo_args *ca)
 {
   delete CallArgsFromC(ca);
 }
-#endif
+
+/**
+ * @brief Call VE function synchronously on a proc
+ *
+ * @param h VEO process handle
+ * @param addr VEMVA address of VE function
+ * @param ca call args
+ * @param result pointer to result variable
+ * @return zero upon success; negative upon failure.
+ */
+int veo_call_sync(veo_proc_handle *h, uint64_t addr, veo_args *ca,
+                  uint64_t *result)
+{
+  try {
+    return ProcHandleFromC(h)->callSync(addr, *CallArgsFromC(ca), result);
+  } catch (VEOException &e) {
+    return -1;
+  }
+}
+
+
+
 //@}

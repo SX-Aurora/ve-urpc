@@ -512,7 +512,8 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
 				dummys = va_arg(ap2, size_t);
 				*((uint64_t *)pp) = dummys;
 				pp += 8;
-				memcpy((void *)pp, dummyp, (size_t)dummys);
+                                if (dummys)
+					memcpy((void *)pp, dummyp, (size_t)dummys);
 				pp += dummys;
 				break;
 			case 'x': // 32 bit padding
