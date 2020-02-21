@@ -45,6 +45,44 @@ using veo::api::CallArgsFromC;
 using veo::api::veo_args_set_;
 using veo::VEOException;
 
+// implementation of VEO API functions
+/**
+ * \defgroup veoapi VEO API
+ *
+ * VE Offloading API functions.
+ * To use VEO API functions, include "ve_offload.h" header.
+ */
+//@{
+/**
+ * @brief return the API version of the VE Offload implementation
+ *
+ * @retval integer value with API version
+ */
+int veo_api_version()
+{
+  return VEO_API_VERSION;
+}
+
+/**
+ * @brief create a VE process with non-default veorun binary
+ *
+ * A VE process is created on the VE node specified by venode. If
+ * venode is -1, a VE process is created on the VE node specified by
+ * environment variable VE_NODE_NUMBER. If venode is -1 and
+ * environment variable VE_NODE_NUMBER is not set, a VE process is
+ * created on the VE node #0
+ *
+ * A user executes the program which invokes this function through the
+ * job scheduler, the value specified by venode will be treated as a
+ * logical VE node number. It will be translated into physical VE node
+ * number assigned by the job scheduler. If venode is -1, the first VE
+ * node of the VE nodes assigned by the job scheduler is used.
+ *
+ * @param venode VE node number
+ * @param veobin VE alternative veorun binary path
+ * @return pointer to VEO process handle upon success
+ * @retval NULL VE process creation failed.
+ */
 veo_proc_handle *veo_proc_create_static(int venode, char *veobin)
 {
   if (venode < -1) {
@@ -121,6 +159,34 @@ veo_proc_handle *veo_proc_create_static(int venode, char *veobin)
   }
 }
  
+/**
+ * @brief create a VE process
+ *
+ * A VE process is created on the VE node specified by venode. If
+ * venode is -1, a VE process is created on the VE node specified by
+ * environment variable VE_NODE_NUMBER. If venode is -1 and
+ * environment variable VE_NODE_NUMBER is not set, a VE process is
+ * created on the VE node #0
+ *
+ * A user executes the program which invokes this function through the
+ * job scheduler, the value specified by venode will be treated as a
+ * logical VE node number. It will be translated into physical VE node
+ * number assigned by the job scheduler. If venode is -1, the first VE
+ * node of the VE nodes assigned by the job scheduler is used.
+ *
+ * @param venode VE node number
+ * @return pointer to VEO process handle upon success
+ * @retval NULL VE process creation failed.
+ */
+veo_proc_handle *veo_proc_create(int venode)
+{
+  char *veobin = getenv("VEORUN_BIN");
+  if (veobin != nullptr)
+    return veo_proc_create_static(venode, veobin);
+  else
+    return veo_proc_create_static(venode, (char *)VEORUN_BIN);
+}
+
 /**
  * @brief destroy a VE process
  * @param proc pointer to VEO process handle

@@ -17,16 +17,7 @@
 #include "vh_shm.h"
 #include "urpc_common.h"
 
-static int urpc_num_peers = 0;
-static urpc_peer_t *urpc_peers[URPC_MAX_PEERS];
-
-
-urpc_peer_t *vh_urpc_peer_get(int peer_id)
-{
-	if (peer_id >= 0 && peer_id < urpc_num_peers)
-		return urpc_peers[peer_id];
-	return NULL;
-}
+static int _urpc_num_peers = 0;
 
 static void vh_urpc_comm_init(urpc_comm_t *uc)
 {
@@ -48,26 +39,30 @@ static void vh_urpc_comm_init(urpc_comm_t *uc)
   
   - allocate shm seg for one peer
   - initialize VH side peer structure
-  
-  Returns: peer_id (can be 0) or a negative number, in case of an error.
+ 
+  Returns: urpc_peer pointer if successful, NULL if failed.
 */
-int vh_urpc_peer_create(void)
+urpc_peer_t *vh_urpc_peer_create(void)
 {
 	int rc = 0, i, peer_id;
 	char *env, *mb_offs = NULL;
-	urpc_peer_t *up;
 
-	up = (urpc_peer_t *)malloc(sizeof(urpc_peer_t));
+        if (_urpc_num_peers == URPC_MAX_PEERS) {
+		eprintf("veo_urpc_peer_init: max number of urpc peers reached!\n");
+                errno = -ENOMEM;
+		return NULL;
+        }
+
+	urpc_peer_t *up = (urpc_peer_t *)malloc(sizeof(urpc_peer_t));
 	if (!up) {
-		eprintf("veo_urpc_peer_init: malloc peer struct failed.\n");
-		return -ENOMEM;
+		eprintf("veo_urpc_peer_create: malloc peer struct failed.\n");
+                errno = -ENOMEM;
+		return NULL;
 	}
 	memset(up, 0, sizeof(up));
-	peer_id = urpc_num_peers++;
-	urpc_peers[peer_id] = up;
 
 	/* TODO: make key VE and core specific to avoid duplicate use of UDMA */
-	up->shm_key = getpid() * URPC_MAX_PEERS + urpc_num_peers;
+	up->shm_key = getpid() * URPC_MAX_PEERS + _urpc_num_peers;
 	up->shm_size = 2 * URPC_BUFF_LEN;
         /*
          * Allocate shared memory segment
@@ -75,8 +70,11 @@ int vh_urpc_peer_create(void)
 	up->shm_segid = _vh_shm_init(up->shm_key, up->shm_size, &up->shm_addr);
 	if (up->shm_segid == -1) {
 		rc = _vh_shm_fini(up->shm_segid, up->shm_addr);
-		return rc ? rc : -ENOMEM;
+                errno = -ENOMEM;
+		return NULL;
 	}
+
+        _urpc_num_peers++;
 
 	//
 	// Set up send communicator
@@ -99,22 +97,18 @@ int vh_urpc_peer_create(void)
 	if (hook)
 		hook(up);
 
-	return peer_id;
+	return up;
 }
 
-int vh_urpc_peer_destroy(int peer_id)
+int vh_urpc_peer_destroy(urpc_peer_t *up)
 {
-	int rc;
-
-	urpc_peer_t *up = vh_urpc_peer_get(peer_id);
-        
-	rc = _vh_shm_fini(up->shm_segid, up->shm_addr);
+	int rc = _vh_shm_fini(up->shm_segid, up->shm_addr);
 	if (rc) {
-		eprintf("vh_shm_fini failed for peer %d, rc=%d\n", peer_id, rc);
+          eprintf("vh_shm_fini failed for peer %p, rc=%d\n", (void *)up, rc);
 		return rc;
 	}
 	free(up);
-	urpc_peers[peer_id] = NULL;
+        _urpc_num_peers--;
 	return 0;
 }
 

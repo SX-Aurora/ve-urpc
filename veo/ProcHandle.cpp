@@ -26,14 +26,13 @@ namespace veo {
  * @param venode VE node ID for running child peer
  * @param binname VE executable
  */
-ProcHandle::ProcHandle(int venode, char *binname) : ve_number(-1)
+  ProcHandle::ProcHandle(int venode, char *binname) : ve_number(-1)
 {
   // create vh side peer
-  this->peer_id = vh_urpc_peer_create();
-  if (this->peer_id < 0) {
+  this->up = vh_urpc_peer_create();
+  if (this->up == nullptr) {
     throw VEOException("ProcHandle: failed to create VH side urpc peer.");
   }
-  this->up = vh_urpc_peer_get(this->peer_id);
 
   // create VE process connected to this peer
   auto rv = vh_urpc_child_create(this->up, binname, venode, -1);
@@ -77,7 +76,7 @@ int ProcHandle::exitProc()
       VEO_ERROR(nullptr, "failed to destroy VE child (rc=%d)", rc);
     }
   }
-  rc = vh_urpc_peer_destroy(this->peer_id);
+  rc = vh_urpc_peer_destroy(this->up);
   this->ve_number = -1;
   return rc;
 }
@@ -360,8 +359,10 @@ int ProcHandle::callSync(uint64_t addr, CallArgs &args, uint64_t *result)
   } else if (m.c.cmd == URPC_CMD_RESCACHE) {
     rc = urpc_unpack_payload(payload, plen, (char *)"LP", (int64_t *)result,
                              &stack_buf, &args.stack_size);
-    if (rc == 0)
+    if (rc == 0) {
+      memcpy(args.stack_buf.get(), stack_buf, args.stack_size);
       args.copyout();
+    }
   } else {
     eprintf("callSync: expected RESULT or RESCACHE, got cmd=%d\n", m.c.cmd);
     rc = -3;

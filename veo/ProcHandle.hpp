@@ -37,7 +37,6 @@ private:
   std::unordered_map<std::pair<uint64_t, std::string>, uint64_t> sym_name;
   std::mutex sym_mtx;
   std::mutex main_mutex;//!< acquire while using main_thread
-  int peer_id;		//!< ve-urpc peer ID
   urpc_peer_t *up;	//!< ve-urpc peer pointer
   uint64_t ve_sp;       //!< stack pointer on VE side
   int ve_number;

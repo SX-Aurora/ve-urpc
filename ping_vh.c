@@ -21,11 +21,9 @@ int main(int argc, char *argv[])
         extern int finish;
         urpc_set_handler_init_hook(&pingpong_init);
 
-	int peer_id = vh_urpc_peer_create();
-	if (peer_id < 0)
+	urpc_peer_t *up = vh_urpc_peer_create();
+	if (up == NULL)
 		return -1;
-
-	urpc_peer_t *up = vh_urpc_peer_get(peer_id);
 
         // start VE peer
         err = vh_urpc_child_create(up, "./pong_ve", 0, -1);
@@ -68,7 +66,7 @@ int main(int argc, char *argv[])
 
 	printf("%d reqs in %fs: %f us/req\n", nloop, (double)(te-ts)/1.e6, (double)(te-ts)/nloop);
 
-	vh_urpc_peer_destroy(peer_id);
+	vh_urpc_peer_destroy(up);
 	return 0;
 }
 

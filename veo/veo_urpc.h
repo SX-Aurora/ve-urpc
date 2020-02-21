@@ -43,9 +43,9 @@ enum veo_urpc_cmd
 
 enum veo_urpc_call_flags
 {
-	VEO_CALL_NO_CACHE  = 0,
-	VEO_CALL_CACHE_IN  = 1,
-	VEO_CALL_CACHE_OUT = 2
+	VEO_CALL_NO_STK  = 0,
+	VEO_CALL_STK_IN  = 1,
+	VEO_CALL_STK_OUT = 2
 };
 
 static inline int64_t send_cmd_nopayload(urpc_peer_t *up, enum veo_urpc_cmd cmd)

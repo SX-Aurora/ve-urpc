@@ -1,14 +1,17 @@
 #include <stdio.h>
-#include <cstdint>
-#include <cstdlib>
+#include <stdint.h>
+#include <stdlib.h>
 #include <dlfcn.h>
 
 #include "urpc_common.h"
 #include "veo_urpc.h"
 
-extern "C" {
-
 int veo_finish_ = 0;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 	//
 	// Commands
@@ -279,7 +282,7 @@ static int readmem_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
 		size_t psz;
 		psz = size <= MAX_SENDFRAG ? size : PART_SENDFRAG;
 		dprintf("readmem_handler psz=%ld\n", psz);
-		auto new_req = urpc_generic_send(up, URPC_CMD_SENDFRAG, (char *)"P",
+		int64_t new_req = urpc_generic_send(up, URPC_CMD_SENDFRAG, (char *)"P",
 						 (void *)s, psz);
 			
 		// check req IDs. Result expected with exactly same req ID.
@@ -386,13 +389,12 @@ static int call_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
 		}
                 dprintf("call_handler: no stack, nregs=%d\n", nregs);
 
-	} else if (m->c.cmd == URPC_CMD_CALL_STKIN ||
-		   m->c.cmd == URPC_CMD_CALL_STKINOUT) {
-		flags |= VEO_CALL_CACHE_IN;
 	} else if (m->c.cmd == URPC_CMD_CALL_STKINOUT) {
-		flags |= VEO_CALL_CACHE_OUT;
+		flags |= VEO_CALL_STK_OUT | VEO_CALL_STK_IN;
+	} else if (m->c.cmd == URPC_CMD_CALL_STKIN) {
+		flags |= VEO_CALL_STK_IN;
 	}
-	if (flags & VEO_CALL_CACHE_IN) {
+	if (flags & VEO_CALL_STK_IN) {
 		urpc_unpack_payload(payload, plen, (char *)"LPLLP",
 				    &addr, (void **)&regs, &nregs,
 				    &stack_top, &recv_sp,
@@ -416,7 +418,7 @@ static int call_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
 	// parameters and variables that look like local variables on this
 	// function's stack.
 	//
-	if (flags & VEO_CALL_CACHE_IN) {
+	if (flags & VEO_CALL_STK_IN) {
 		memcpy((void *)stack_top, stack, stack_size);
 	}
 	//
@@ -452,7 +454,7 @@ static int call_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
 		asm volatile("or %s12, 0, %0\n\t"          /* target function address */
 			     ::"r"(addr));
 		asm volatile("bsic %lr, (,%s12)":::);
-	} else {
+	} else if (flags & VEO_CALL_STK_OUT) {
 		asm volatile("or %s12, 0, %0\n\t"          /* target function address */
 			     "st %fp, 0x0(,%sp)\n\t"       /* save original fp */
 			     "st %lr, 0x8(,%sp)\n\t"       /* fake prologue */
@@ -468,7 +470,7 @@ static int call_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
 	}
 	asm volatile("or %0, 0, %s0":"=r"(result));
 
-	if (flags & VEO_CALL_CACHE_OUT) {
+	if (flags & VEO_CALL_STK_OUT) {
 		// copying back from stack must happen in the same function,
 		// otherwise we overwrite it!
 #pragma _NEC ivdep
@@ -539,7 +541,6 @@ void veo_urpc_register_ve_handlers(urpc_peer_t *up)
 		eprintf("register_handler failed for cmd %d\n", 1);
 }
 #endif
-} // extern "C"
 
 #ifdef __ve__
 __attribute__((constructor))
@@ -549,3 +550,6 @@ static void _veo_urpc_init_register(void)
 }
 #endif
 
+#ifdef __cplusplus
+} //extern "C"
+#endif

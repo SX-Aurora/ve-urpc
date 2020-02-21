@@ -194,12 +194,11 @@ int ve_transfer_data_sync(uint64_t dst_vehva, uint64_t src_vehva, int len);
 
 #else
 
-int vh_urpc_peer_create(void);
-int vh_urpc_peer_destroy(int peer_id);
+urpc_peer_t *vh_urpc_peer_create(void);
+int vh_urpc_peer_destroy(urpc_peer_t *up);
 int vh_urpc_child_create(urpc_peer_t *up, char *binary,
                          int venode_id, int ve_core);
 int vh_urpc_child_destroy(urpc_peer_t *up);
-urpc_peer_t *vh_urpc_peer_get(int peer_id);
 
 #endif
 

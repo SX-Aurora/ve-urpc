@@ -12,7 +12,7 @@ int main(int argc, char *argv[])
 
         struct veo_proc_handle *proc;
 
-        proc = veo_proc_create_static(0, "./test_ve");
+        proc = veo_proc_create_static(1, "./veorun");
         printf("proc = %p\n", (void *)proc);
 
         uint64_t libh = veo_load_library(proc, "./libvehello.so");
@@ -43,7 +43,7 @@ int main(int argc, char *argv[])
         veo_args_clear(argp);
 
         long ts, te;
-        int nloop = 1000;
+        int nloop = 1000000;
         ts = get_time_us();
         for (int i=0; i<nloop; i++) {
           rc = veo_call_sync(proc, sym, argp, &result);

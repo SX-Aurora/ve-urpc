@@ -1,26 +1,33 @@
 NCC = /opt/nec/ve/bin/ncc
+NAR = /opt/nec/ve/bin/nar
 GCC = gcc
-DEBUG = -g
+AR = ar
+#DEBUG = -g
 GCCFLAGS = --std=c11 -fpic -pthread -D_SVID_SOURCE -O3 $(DEBUG)
 NCCFLAGS = -pthread -fpic -O3 $(DEBUG)
 
 VHLIB_OBJS = init_hook_vh.o vh_shm.o vh_urpc.o urpc_common_vh.o
 VELIB_OBJS = init_hook_ve.o ve_urpc.o urpc_common_ve.o
 VELIB_OBJS_OMP =  init_hook_ve.o ve_urpc_omp.o urpc_common_ve.o
+LIBS = liburpcVH.so liburpcVE.so liburpcVE_omp.so
+TESTS = ping_vh pong_ve
 
-ALL: liburpc_vh.so liburpc_ve.so liburpc_ve_omp.so ping_vh pong_ve
 
-liburpc_vh.so: $(VHLIB_OBJS)
+ALL: $(LIBS) $(TESTS)
+
+
+liburpcVH.so: $(VHLIB_OBJS)
 	$(GCC) $(GCCFLAGS) -shared -o $@ $^
 #	$(GCC) $(GCCFLAGS) -Wl,--version-script=liburpc_vh.map -shared -o $@ $^
 
-liburpc_ve.so: $(VELIB_OBJS)
+liburpcVE.so: $(VELIB_OBJS)
 	$(NCC) -v -Wl,-zdefs $(NCCFLAGS) -shared -o $@ $^ -lveio
 #	$(NCC) -v -Wl,-zdefs -Wl,--version-script=liburpc_ve.map $(NCCFLAGS) -shared -o $@ $^ -lveio
 
-liburpc_ve_omp.so: $(VELIB_OBJS_OMP)
+liburpcVE_omp.so: $(VELIB_OBJS_OMP)
 	$(NCC) -Wl,-zdefs $(NCCFLAGS) -shared -fopenmp -o $@ $^ -lveio
 #	$(NCC) -Wl,-zdefs -Wl,--version-script=liburpc_ve.map $(NCCFLAGS) -shared -fopenmp -o $@ $< -lveio
+
 
 # VH objects below
 
@@ -42,8 +49,8 @@ pingpong_vh.o: pingpong.c urpc_common.h
 ping_vh.o: ping_vh.c
 	$(GCC) $(GCCFLAGS) -o $@ -c $<
 
-ping_vh: ping_vh.o pingpong_vh.o $(VHLIB_OBJS)
-	$(GCC) $(GCCFLAGS) -o $@ $^
+ping_vh: ping_vh.o pingpong_vh.o
+	$(GCC) $(GCCFLAGS) -o $@ $^ -L. -lurpcVH
 
 #  VE objects below
 
@@ -65,8 +72,8 @@ pingpong_ve.o: pingpong.c urpc_common.h
 pong_ve.o: pong_ve.c
 	$(NCC) $(NCCFLAGS) -o $@ -c $<
 
-pong_ve: pong_ve.o pingpong_ve.o $(VELIB_OBJS)
-	$(NCC) $(NCCFLAGS) -o $@ $^ -lveio -lpthread
+pong_ve: pong_ve.o pingpong_ve.o
+	$(NCC) $(NCCFLAGS) -o $@ $^ -L. -lurpcVE -lveio -lpthread
 
 clean:
-	rm -f *.o *.so ping_v? test_*_urpc
+	rm -f *.o *.so ping_v? $(TESTS) $(LIBS)
