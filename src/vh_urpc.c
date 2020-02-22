@@ -112,6 +112,20 @@ int vh_urpc_peer_destroy(urpc_peer_t *up)
 	return 0;
 }
 
+static int argsexp(char *argstr, char **argv, int maxargs)
+{
+	int argc = 0;
+	
+	char *p2 = strtok(argstr, " ");
+	while (p2 && argc < maxargs-1)
+	{
+		argv[argc++] = p2;
+		p2 = strtok(0, " ");
+	}
+	argv[argc] = 0;
+	return argc;
+}
+
 /*
   Create a child process running the binary in the args. Create appropriate
   environment vars for the child process and store the pid of the new process.
@@ -125,11 +139,22 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 {
 	int err, rc = 0;
 	struct stat sb;
+	int maxargs = 64;
+	char *argv[maxargs];
 
-	if (stat(binary, &sb) == -1) {
+	// exec binary
+	extern char** environ;
+	char *e;
+	e = getenv("URPC_VE_BIN");
+	if (!e)
+		e = binary;
+	int nargs = argsexp(e, argv, maxargs);
+
+	if (stat(argv[0], &sb) == -1) {
 		perror("stat");
 		return -ENOENT;
 	}
+	
 	pid_t c_pid = fork();
 	if (c_pid == 0) {
 		// this is the child
@@ -146,14 +171,7 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 			setenv("URPC_VE_CORE", tmp, 1);
 		}
 
-		// exec binary
-		extern char** environ;
-		char *e;
-		e = getenv("URPC_VE_BIN");
-		if (e)
-			binary = e;
-		char *argv[] = { binary, (char *)0 };
-		err = execve(binary, argv, environ);
+		err = execve(argv[0], argv, environ);
 		if (err) {
 			rc = -errno;
 			perror("ERROR: execve");

@@ -12,7 +12,7 @@ int main(int argc, char *argv[])
 
         struct veo_proc_handle *proc;
 
-        proc = veo_proc_create(0);
+        proc = veo_proc_create(-1);
         printf("proc = %p\n", (void *)proc);
         if (proc == NULL)
 		return -1;

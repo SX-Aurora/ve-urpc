@@ -41,7 +41,7 @@ install: $(LIBS) | $(DEST)/lib/ $(DEST)/include/ $(dir $(VEORUN_BIN))/
 .SECONDEXPANSION:
 
 $(BLIB)/libveoVE.so: $(VELIB_OBJS) | $$(@D)/
-	$(NCC) -Wl,-zdefs $(NCPPFLAGS) -fpic -shared -o $@ $^ \
+	$(NCC) -Wl,-zdefs $(NCCFLAGS) -fpic -shared -o $@ $^ \
 		$(LDFLAGS) -lurpcVE -lveio -ldl
 
 $(BLIB)/libveoVH.so: $(VHLIB_OBJS) | $$(@D)/
@@ -57,6 +57,10 @@ $(BLIB)/libveoVH.a: $(VHLIB_OBJS) | $$(@D)/
 
 $(BB)/veorun: $(BVE)/veorun.o | $$(@D)/
 	$(NCPP) $(NCPPFLAGS) -o $@ $^ $(LDFLAGS) -L. -lveoVE -L.. -lurpcVE -lveio -lpthread
+
+
+$(BVE)/veo_urpc.o: veo_urpc.cpp
+	$(NCC) $(NCCFLAGS) -fpic -o $@ -c $<
 
 $(BVH)/%.o: %.c | $$(@D)/
 	$(GCC) $(GCCFLAGS) -fpic -o $@ -c $<
