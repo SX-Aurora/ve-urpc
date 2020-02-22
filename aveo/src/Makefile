@@ -41,11 +41,11 @@ install: $(LIBS) | $(DEST)/lib/ $(DEST)/include/ $(dir $(VEORUN_BIN))/
 .SECONDEXPANSION:
 
 $(BLIB)/libveoVE.so: $(VELIB_OBJS) | $$(@D)/
-	$(NCC) -Wl,-zdefs $(NCPPFLAGS) -shared -o $@ $^ \
+	$(NCC) -Wl,-zdefs $(NCPPFLAGS) -fpic -shared -o $@ $^ \
 		$(LDFLAGS) -lurpcVE -lveio -ldl
 
 $(BLIB)/libveoVH.so: $(VHLIB_OBJS) | $$(@D)/
-	$(GPP) -Wl,-zdefs $(GPPFLAGS) -shared -o $@ $^ \
+	$(GPP) -Wl,-zdefs $(GPPFLAGS) -fpic -shared -o $@ $^ \
 		$(LDFLAGS) -lurpcVH -llog4c -ldl
 
 $(BLIB)/libveoVE.a: $(VELIB_OBJS) | $$(@D)/

@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
         veo_args_clear(argp);
 
         long ts, te;
-        int nloop = 3;
+        int nloop = 100000;
         ts = get_time_us();
         for (int i=0; i<nloop; i++) {
           rc = veo_call_sync(proc, sym, argp, &result);
