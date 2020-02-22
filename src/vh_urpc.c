@@ -112,11 +112,11 @@ int vh_urpc_peer_destroy(urpc_peer_t *up)
 	return 0;
 }
 
-static int argsexp(char *argstr, char **argv, int maxargs)
+static int argsexp(char *args, char **argv, int maxargs)
 {
 	int argc = 0;
 	
-	char *p2 = strtok(argstr, " ");
+	char *p2 = strtok(args, " ");
 	while (p2 && argc < maxargs-1)
 	{
 		argv[argc++] = p2;
@@ -137,7 +137,7 @@ static int argsexp(char *argstr, char **argv, int maxargs)
 int vh_urpc_child_create(urpc_peer_t *up, char *binary,
                          int venode_id, int ve_core)
 {
-	int err, rc = 0;
+	int err;
 	struct stat sb;
 	int maxargs = 64;
 	char *argv[maxargs];
@@ -148,7 +148,8 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 	e = getenv("URPC_VE_BIN");
 	if (!e)
 		e = binary;
-	int nargs = argsexp(e, argv, maxargs);
+        char *args = strdup(e);
+	int nargs = argsexp(args, argv, maxargs);
 
 	if (stat(argv[0], &sb) == -1) {
 		perror("stat");
@@ -173,20 +174,20 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 
 		err = execve(argv[0], argv, environ);
 		if (err) {
-			rc = -errno;
 			perror("ERROR: execve");
 			_exit(errno);
 		}
 
 	} else if (c_pid > 0) {
 		// this is the parent
+		free(args);
 		up->child_pid = c_pid;
 	} else {
 		// this is an error
 		perror("ERROR vh_urpc_child_create");
 		return -errno;
 	}
-	return rc;
+	return 0;
 }
 
 int vh_urpc_child_destroy(urpc_peer_t *up)

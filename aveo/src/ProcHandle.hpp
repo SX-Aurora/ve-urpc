@@ -10,9 +10,8 @@
 #include <mutex>
 #include <iostream>
 
-#include "ve_offload.h"
+#include <ve_offload.h>
 #include <urpc_common.h>
-//#include <veorun.h>
 #include "CallArgs.hpp"
 //#include "ThreadContext.hpp"
 #include "VEOException.hpp"
@@ -39,6 +38,7 @@ private:
   std::mutex main_mutex;//!< acquire while using main_thread
   urpc_peer_t *up;	//!< ve-urpc peer pointer
   uint64_t ve_sp;       //!< stack pointer on VE side
+  //std::unique_ptr<ThreadContext> main_ctx;
   int ve_number;
 
 public:
