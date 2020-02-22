@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <dlfcn.h>
 
-#include "urpc_common.h"
+#include <urpc_common.h>
 #include "veo_urpc.h"
 
 int veo_finish_ = 0;

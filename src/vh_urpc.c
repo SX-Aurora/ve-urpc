@@ -123,8 +123,13 @@ int vh_urpc_peer_destroy(urpc_peer_t *up)
 int vh_urpc_child_create(urpc_peer_t *up, char *binary,
                          int venode_id, int ve_core)
 {
-	int err;
+	int err, rc = 0;
+	struct stat sb;
 
+	if (stat(binary, &sb) == -1) {
+		perror("stat");
+		return -ENOENT;
+	}
 	pid_t c_pid = fork();
 	if (c_pid == 0) {
 		// this is the child
@@ -150,8 +155,9 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 		char *argv[] = { binary, (char *)0 };
 		err = execve(binary, argv, environ);
 		if (err) {
+			rc = -errno;
 			perror("ERROR: execve");
-			exit(errno);
+			_exit(errno);
 		}
 
 	} else if (c_pid > 0) {
@@ -162,7 +168,7 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 		perror("ERROR vh_urpc_child_create");
 		return -errno;
 	}
-	return 0;
+	return rc;
 }
 
 int vh_urpc_child_destroy(urpc_peer_t *up)

@@ -26,7 +26,7 @@ namespace veo {
  * @param venode VE node ID for running child peer
  * @param binname VE executable
  */
-  ProcHandle::ProcHandle(int venode, char *binname) : ve_number(-1)
+ProcHandle::ProcHandle(int venode, char *binname) : ve_number(-1)
 {
   // create vh side peer
   this->up = vh_urpc_peer_create();
@@ -38,8 +38,11 @@ namespace veo {
   auto rv = vh_urpc_child_create(this->up, binname, venode, -1);
   if (rv != 0) {
     throw VEOException("ProcHandle: failed to create VE process.");
+    eprintf("ProcHandle: failed to create VE process.\n");
   }
-  wait_peer_attach(this->up);
+  if (wait_peer_attach(this->up) != 0) {
+    throw VEOException("ProcHandle: timeout while waiting for VE.");
+  }
 
   // TODO: FIXME, the sp must come from inside the kernel call handler!
   CallArgs args;

@@ -14,10 +14,10 @@
   When done, mark the shared memory segment as destroyed.
   This avoids left-over shared memory segments in the VH memory.
 */
-void wait_peer_attach(urpc_peer_t *up)
+int wait_peer_attach(urpc_peer_t *up)
 {
 #ifndef __ve__
-	vh_shm_wait_peers(up->shm_segid);
+	return vh_shm_wait_peers(up->shm_segid);
 #endif
 }
 

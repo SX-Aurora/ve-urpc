@@ -7,7 +7,7 @@ include ../make.inc
 VHLIB_OBJ := init_hook.o vh_shm.o vh_urpc.o urpc_common.o
 VELIB_OBJ := init_hook.o ve_urpc.o urpc_common.o
 
-LIBS := $(BVH)/liburpcVH.so $(BVE)/liburpcVE.so $(BVE_OMP)/liburpcVE_omp.so
+LIBS := $(BLIB)/liburpcVH.so $(BLIB)/liburpcVE.so $(BLIB)/liburpcVE_omp.so
 INCLUDES := urpc_common.h urpc_debug.h urpc_time.h
 
 VHLIB_OBJS := $(addprefix $(BVH)/,$(VHLIB_OBJ))
@@ -46,15 +46,15 @@ install: $(LIBS) | $(DEST)/lib/ $(DEST)/include/
 
 .SECONDEXPANSION:
 
-$(BVH)/liburpcVH.so: $(VHLIB_OBJS) | $$(@D)/
+$(BLIB)/liburpcVH.so: $(VHLIB_OBJS) | $$(@D)/
 	$(GCC) $(GCCFLAGS) -fpic -shared -o $@ $^
 #	$(GCC) $(GCCFLAGS) -fpic -Wl,--version-script=liburpc_vh.map -shared -o $@ $^
 
-$(BVE)/liburpcVE.so: $(VELIB_OBJS) | $$(@D)/
+$(BLIB)/liburpcVE.so: $(VELIB_OBJS) | $$(@D)/
 	$(NCC) -v -Wl,-zdefs $(NCCFLAGS) -fpic -shared -o $@ $^ -lveio
 #	$(NCC) -v -Wl,-zdefs -Wl,--version-script=liburpc_ve.map $(NCCFLAGS) -fpic -shared -o $@ $^ -lveio
 
-$(BVE_OMP)/liburpcVE_omp.so: $(VELIB_OBJS_OMP) | $$(@D)/
+$(BLIB)/liburpcVE_omp.so: $(VELIB_OBJS_OMP) | $$(@D)/
 	$(NCC) -Wl,-zdefs $(NCCFLAGS) -fpic -shared -fopenmp -o $@ $^ -lveio
 #	$(NCC) -Wl,-zdefs -Wl,--version-script=liburpc_ve.map $(NCCFLAGS) -fpic -shared -fopenmp -o $@ $< -lveio
 

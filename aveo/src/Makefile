@@ -1,0 +1,75 @@
+DEST ?= ../install
+BUILD ?= ../build
+
+include ../make_aveo.inc
+
+
+VEORUN_BIN ?= $(abspath $(DEST)/libexec/veorun)
+
+DEFINES := -DVEORUN_BIN=\"$(VEORUN_BIN)\"
+GPPFLAGS := $(GPPFLAGS) $(DEFINES)
+LDFLAGS := -Wl,-rpath,$(abspath $(DEST)/lib) -Wl,-rpath,$(abspath $(BLIB)) -Wl,-rpath,. -L$(BLIB)
+
+VHLIB_OBJS := $(addprefix $(BVH)/,ProcHandle.o CallArgs.o veo_api.o veo_urpc.o log.o)
+VELIB_OBJS := $(addprefix $(BVE)/,veo_urpc.o)
+LIBS = $(addprefix $(BLIB)/,libveoVE.so libveoVH.so libveoVE.a libveoVH.a)
+INCLUDES := ve_offload.h
+
+
+ALL: $(LIBS) $(BB)/veorun
+
+.PRECIOUS: $(BUILD)/ $(BUILD)%/ $(DEST)/ $(DEST)%/
+
+%/:
+	mkdir -p $@
+
+
+install: $(LIBS) | $(DEST)/lib/ $(DEST)/include/ $(dir $(VEORUN_BIN))/
+	cp -p $(LIBS) $(DEST)/lib
+	cp -p $(INCLUDES) $(DEST)/include
+	cp -p $(BB)/veorun $(VEORUN_BIN)
+
+
+%/ProcHandle.o: ProcHandle.cpp ProcHandle.hpp VEOException.hpp veo_urpc.h CallArgs.hpp log.hpp
+%/CallArgs.o: CallArgs.cpp CallArgs.hpp VEOException.hpp ve_offload.h
+%/veo_urpc.o: veo_urpc.c veo_urpc.h
+%/veo_api.o: veo_api.cpp ProcHandle.hpp CallArgs.hpp VEOException.hpp log.hpp
+%/log.o: log.cpp log.hpp
+%/veorun.o: veorun.c veo_urpc.h
+
+
+.SECONDEXPANSION:
+
+$(BLIB)/libveoVE.so: $(VELIB_OBJS) | $$(@D)/
+	$(NCC) -Wl,-zdefs $(NCPPFLAGS) -shared -o $@ $^ \
+		$(LDFLAGS) -lurpcVE -lveio -ldl
+
+$(BLIB)/libveoVH.so: $(VHLIB_OBJS) | $$(@D)/
+	$(GPP) -Wl,-zdefs $(GPPFLAGS) -shared -o $@ $^ \
+		$(LDFLAGS) -lurpcVH -llog4c -ldl
+
+$(BLIB)/libveoVE.a: $(VELIB_OBJS) | $$(@D)/
+	$(NAR) rv $@ $^
+
+$(BLIB)/libveoVH.a: $(VHLIB_OBJS) | $$(@D)/
+	$(AR) rv $@ $^
+
+
+$(BB)/veorun: $(BVE)/veorun.o | $$(@D)/
+	$(NCPP) $(NCPPFLAGS) -o $@ $^ $(LDFLAGS) -L. -lveoVE -L.. -lurpcVE -lveio -lpthread
+
+$(BVH)/%.o: %.c | $$(@D)/
+	$(GCC) $(GCCFLAGS) -fpic -o $@ -c $<
+
+$(BVE)/%.o: %.c | $$(@D)/
+	$(NCC) $(NCCFLAGS) -fpic -o $@ -c $<
+
+$(BVH)/%.o: %.cpp | $$(@D)/
+	$(GPP) $(GPPFLAGS) -fpic -o $@ -c $<
+
+$(BVE)/%.o: %.cpp | $$(@D)/
+	$(NCPP) $(NCPPFLAGS) -fpic -o $@ -c $<
+
+
+clean:
+	rm -f $(VHLIB_OBJS) $(VELIB_OBJS) $(VELIB_OBJS_OMP) $(LIBS) $(BB)/veorun

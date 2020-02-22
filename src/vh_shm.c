@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 
 #include "urpc_debug.h"
+#include "urpc_time.h"
 
 /*
   Returns: the segment ID of the shm segment.
@@ -64,17 +65,25 @@ int _vh_shm_fini(int segid, void *local_addr)
 	return err;
 }
 
-void vh_shm_wait_peers(int segid)
+int vh_shm_wait_peers(int segid)
 {
 	struct shmid_ds ds;
+        long ts = get_time_us();
+        int rc = 0;
 
 	for (;;) {
 		if (-1 == (shmctl(segid, IPC_STAT, &ds))) {
 			perror("[vh_shm_wait_peers] Failed shmctl IPC_STAT");
-			return;
+			return -1;
 		}
 		if (ds.shm_nattch == 2)
 			break;
+                if (timediff_us(ts) > 5000000) {
+			rc = -1;
+			perror("vh_shm_wait_peers] Timeout while waiting for peer.");
+			break;
+		}
 	}
 	_vh_shm_destroy(segid);
+	return rc;
 }

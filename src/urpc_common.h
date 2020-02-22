@@ -202,7 +202,7 @@ int vh_urpc_child_destroy(urpc_peer_t *up);
 
 #endif
 
-void wait_peer_attach(urpc_peer_t *up);
+int wait_peer_attach(urpc_peer_t *up);
 void urpc_set_receiver_flags(urpc_comm_t *uc, uint32_t flags);
 void urpc_set_sender_flags(urpc_comm_t *uc, uint32_t flags);
 uint32_t urpc_get_receiver_flags(urpc_comm_t *uc);
