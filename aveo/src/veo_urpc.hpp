@@ -3,6 +3,11 @@
 
 #include <urpc_common.h>
 
+#ifndef __ve__
+#include <CallArgs.hpp>
+using veo::CallArgs;
+#endif
+
 // reply timeout in us
 #define REPLY_TIMEOUT 2000000
 
@@ -11,9 +16,7 @@
 // multipart SEND/RECVFRAG transfer size
 #define PART_SENDFRAG ALIGN8B(URPC_DATA_BUFF_LEN >> 1)
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace veo {
 
 //
 // URPC commands
@@ -78,8 +81,6 @@ static inline int pickup_acks(urpc_peer_t *up, int acks)
 }
 
  
-extern int veo_finish_;
-
 void send_ping_nolock(urpc_peer_t *up);
 int64_t send_ack_nolock(urpc_peer_t *up);
 int64_t send_result_nolock(urpc_peer_t *up, int64_t result);
@@ -90,8 +91,13 @@ int64_t send_write_mem_nolock(urpc_peer_t *up, uint64_t dst, size_t size, void *
 int wait_req_result(urpc_peer_t *up, int64_t req, int64_t *result);
 int wait_req_ack(urpc_peer_t *up, int64_t req);
 
-#ifdef __cplusplus
-} // extern "C"
+#ifndef __ve__
+int64_t send_call_nolock(urpc_peer_t *up, uint64_t ve_sp, uint64_t addr,
+                         CallArgs &arg);
+int unpack_call_result(urpc_mb_t &m, CallArgs &arg, void *payload, size_t plen,
+                       uint64_t *result);
 #endif
+
+} // namespace veo
 
 #endif /* VEO_URPC_INCLUDE */

@@ -30,9 +30,9 @@ install: $(LIBS) | $(DEST)/lib/ $(DEST)/include/ $(dir $(VEORUN_BIN))/
 	cp -p $(BB)/veorun $(VEORUN_BIN)
 
 
-%/ProcHandle.o: ProcHandle.cpp ProcHandle.hpp VEOException.hpp veo_urpc.h CallArgs.hpp log.hpp
+%/ProcHandle.o: ProcHandle.cpp ProcHandle.hpp VEOException.hpp veo_urpc.hpp CallArgs.hpp log.hpp
 %/CallArgs.o: CallArgs.cpp CallArgs.hpp VEOException.hpp ve_offload.h
-%/veo_urpc.o: veo_urpc.c veo_urpc.h
+%/veo_urpc.o: veo_urpc.c veo_urpc.hpp
 %/veo_api.o: veo_api.cpp ProcHandle.hpp CallArgs.hpp VEOException.hpp log.hpp
 %/log.o: log.cpp log.hpp
 %/veorun.o: veorun.c veo_urpc.h
@@ -41,7 +41,7 @@ install: $(LIBS) | $(DEST)/lib/ $(DEST)/include/ $(dir $(VEORUN_BIN))/
 .SECONDEXPANSION:
 
 $(BLIB)/libveoVE.so: $(VELIB_OBJS) | $$(@D)/
-	$(NCC) -Wl,-zdefs $(NCCFLAGS) -fpic -shared -o $@ $^ \
+	$(NCPP) -Wl,-zdefs $(NCPPFLAGS) -fpic -shared -o $@ $^ \
 		$(LDFLAGS) -lurpcVE -lveio -ldl
 
 $(BLIB)/libveoVH.so: $(VHLIB_OBJS) | $$(@D)/

@@ -8,7 +8,7 @@
 #include "CallArgs.hpp"
 #include "log.hpp"
 
-#include "veo_urpc.h"
+#include "veo_urpc.hpp"
 
 #include <string.h>
 #include <unistd.h>
@@ -44,7 +44,8 @@ ProcHandle::ProcHandle(int venode, char *binname) : ve_number(-1)
     throw VEOException("ProcHandle: timeout while waiting for VE.");
   }
 
-  // TODO: FIXME, the sp must come from inside the kernel call handler!
+  // The sync call returns the stack pointer from inside the VE kernel
+  // call handler if the function address passed is 0.
   CallArgs args;
   auto rc = this->callSync(0, args, &this->ve_sp);
   if (rc < 0) {
@@ -300,76 +301,25 @@ int ProcHandle::writeMem(uint64_t dst, const void *src, size_t size)
  */
 int ProcHandle::callSync(uint64_t addr, CallArgs &args, uint64_t *result)
 {
-  VEO_TRACE(nullptr, "%s(%#lx, ...)", __func__, addr);
-  VEO_DEBUG(nullptr, "VE function = %p", (void *)addr);
-
-  args.setup(this->ve_sp);
-
-  void *stack_buf = (void *)args.stack_buf.get();
-  
-  auto regs = args.getRegVal(this->ve_sp);
-  VEO_ASSERT(regs.size() <= NUM_ARGS_ON_REGISTER);
-  size_t regs_sz = regs.size() * sizeof(uint64_t);
-
-  int64_t req;
-  int rc;
-
-  if (!(args.copied_in || args.copied_out)) {
-    // no stack transfer
-    // transfered data: addr, regs array
-    
-    req = urpc_generic_send(this->up, URPC_CMD_CALL, (char *)"LP",
-                            addr, (void *)regs.data(), regs_sz);
-
-  } else if (args.copied_in && !args.copied_out) {
-    // stack copied IN only
-    // transfered data: addr, regs array, stack_top, stack_pointer, stack_image
-    
-    req = urpc_generic_send(this->up, URPC_CMD_CALL_STKIN, (char *)"LPLLP",
-                            addr, (void *)regs.data(), regs_sz,
-                            args.stack_top, this->ve_sp,
-                            stack_buf, args.stack_size);
-
-    dprintf("callSync: stack IN, nregs=%d, stack_top=%p, sp=%p, stack_size=%d\n",
-            regs_sz/8, (void *)args.stack_top, (void *)this->ve_sp, args.stack_size);
-  } else if (args.copied_out) {
-    // stack transfered into VE, too, even though only copy out is needed
-    // transfered data: addr, regs array, stack_top, stack_pointer, stack_image
-
-    req = urpc_generic_send(this->up, URPC_CMD_CALL_STKINOUT, (char *)"LPLLP",
-                            addr, (void *)regs.data(), regs_sz,
-                            args.stack_top, this->ve_sp,
-                            stack_buf, args.stack_size);
-    dprintf("callSync: stack INOUT, nregs=%d, stack_top=%p, sp=%p, stack_size=%d\n",
-            regs_sz/8, (void *)args.stack_top, (void *)this->ve_sp, args.stack_size);
-  }
-
   urpc_mb_t m;
   void *payload;
   size_t plen;
+
+  std::lock_guard<std::mutex> lock(this->main_mutex);
+  VEO_TRACE(nullptr, "%s(%#lx, ...)", __func__, addr);
+  VEO_DEBUG(nullptr, "VE function = %p", (void *)addr);
+
+  int64_t req = send_call_nolock(this->up, this->ve_sp, addr, args);
+
+  // TODO: make sync call timeout configurable
   if (!urpc_recv_req_timeout(up, &m, req, 150*REPLY_TIMEOUT, &payload, &plen)) {
     // timeout! complain.
     eprintf("callSync timeout waiting for RESULT req=%ld\n", req);
     return -1;
   }
-  if (m.c.cmd == URPC_CMD_RESULT) {
-    if (plen) {
-      rc =urpc_unpack_payload(payload, plen, (char *)"L", (int64_t *)result);
-      urpc_slot_done(this->up->recv.tq, REQ2SLOT(req), &m);
-    } else {
-      eprintf("result message for req=%ld had no payload!?", req);
-    }
-  } else if (m.c.cmd == URPC_CMD_RESCACHE) {
-    rc = urpc_unpack_payload(payload, plen, (char *)"LP", (int64_t *)result,
-                             &stack_buf, &args.stack_size);
-    if (rc == 0) {
-      memcpy(args.stack_buf.get(), stack_buf, args.stack_size);
-      args.copyout();
-    }
-  } else {
-    eprintf("callSync: expected RESULT or RESCACHE, got cmd=%d\n", m.c.cmd);
-    rc = -3;
-  }
+
+  int rc = unpack_call_result(m, args, payload, plen, result);
+  
   urpc_slot_done(this->up->recv.tq, REQ2SLOT(req), &m);
 
   return rc;

@@ -1,12 +1,13 @@
 #include <stdio.h>
 
 #include "urpc_common.h"
-#include "veo_urpc.h"
+//#include "veo_urpc.h"
 
 int main()
 {
 	int err;
 
+        extern int veo_finish_;
         extern void veo_urpc_register_ve_handlers(urpc_peer_t *);
         urpc_set_handler_init_hook(&veo_urpc_register_ve_handlers);
 
