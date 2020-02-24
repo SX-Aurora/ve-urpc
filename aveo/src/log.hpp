@@ -19,17 +19,17 @@ void veo__log(const ThreadContext *, const log4c_location_info_t *,
 #define VEO_LOG(ctx, prio, fmt, ...) do { \
   const log4c_location_info_t location__ = \
     LOG4C_LOCATION_INFO_INITIALIZER(NULL); \
-  veo__log(ctx, &location__, prio, fmt, __VA_ARGS__); \
+  veo__log(ctx, &location__, prio, fmt, ## __VA_ARGS__); \
 } while (0)
 
 #define VEO_ERROR(ctx, fmt, ...) do {                 \
-  VEO_LOG(ctx, veo::VEO_LOG_ERROR, fmt, __VA_ARGS__); \
+  VEO_LOG(ctx, veo::VEO_LOG_ERROR, fmt, ## __VA_ARGS__); \
   printf("VEO_ERROR " fmt, __VA_ARGS__);              \
   } while(0)
 #define VEO_DEBUG(ctx, fmt, ...) VEO_LOG(ctx, veo::VEO_LOG_DEBUG, fmt, \
-                                         __VA_ARGS__)
+                                         ## __VA_ARGS__)
 #define VEO_TRACE(ctx, fmt, ...) VEO_LOG(ctx, veo::VEO_LOG_TRACE, fmt, \
-                                         __VA_ARGS__)
+                                         ## __VA_ARGS__)
 
 #define VEO_ASSERT(_cond) do { \
   if (!(_cond)) { \

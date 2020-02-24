@@ -20,7 +20,10 @@ ProcHandle *ProcHandleFromC(veo_proc_handle *h)
 {
   return reinterpret_cast<ProcHandle *>(h);
 }
-
+ThreadContext *ThreadContextFromC(veo_thr_ctxt *c)
+{
+  return reinterpret_cast<ThreadContext *>(c);
+}
 CallArgs *CallArgsFromC(veo_args *a)
 {
   return reinterpret_cast<CallArgs *>(a);
@@ -41,6 +44,7 @@ template <typename T> int veo_args_set_(veo_args *ca, int argnum, T val)
 } // namespace veo
 
 using veo::api::ProcHandleFromC;
+using veo::api::ThreadContextFromC;
 using veo::api::CallArgsFromC;
 using veo::api::veo_args_set_;
 using veo::VEOException;
@@ -313,47 +317,51 @@ int veo_write_mem(veo_proc_handle *h, uint64_t dst, const void *src,
   }
 }
 
-#if 0
 /**
- * @brief Asynchronously read VE memory
+ * @brief open a VEO context
  *
- * @param ctx VEO context
- * @param dst destination VHVA
- * @param src source VEMVA
- * @param size size in byte
- * @return request ID
- * @retval VEO_REQUEST_ID_INVALID request failed.
+ * Create a new VEO context, a pseudo thread and VE thread for the context.
+ *
+ * @param proc VEO process handle
+ * @return a pointer to VEO thread context upon success.
+ * @retval NULL failed to create a VEO context.
  */
-uint64_t veo_async_read_mem(veo_thr_ctxt *ctx, void *dst, uint64_t src,
-                            size_t size)
+veo_thr_ctxt *veo_context_open(veo_proc_handle *proc)
 {
   try {
-    return ThreadContextFromC(ctx)->asyncReadMem(dst, src, size);
+    veo_thr_ctxt *ctx = ProcHandleFromC(proc)->openContext()->toCHandle();
+    auto rv = reinterpret_cast<intptr_t>(ctx);
+    if ( rv < 0 ) {
+      errno = -rv;
+      return NULL;
+    }
+    return ctx;
   } catch (VEOException &e) {
-    return VEO_REQUEST_ID_INVALID;
+    VEO_ERROR(nullptr, "failed to open context: %s", e.what());
+    errno = e.err();
+    return NULL;
   }
 }
 
 /**
- * @brief Asynchronously write VE memory
+ * @brief close a VEO context
  *
- * @param ctx VEO context
- * @param dst destination VEMVA
- * @param src source VHVA
- * @param size size in byte
- * @return request ID
- * @retval VEO_REQUEST_ID_INVALID request failed.
+ * @param ctx a VEO context to close
+ * @retval 0 VEO context is successfully closed.
+ * @retval non-zero failed to close VEO context.
  */
-uint64_t veo_async_write_mem(veo_thr_ctxt *ctx, uint64_t dst, const void *src,
-                             size_t size)
+int veo_context_close(veo_thr_ctxt *ctx)
 {
-  try {
-    return ThreadContextFromC(ctx)->asyncWriteMem(dst, src, size);
-  } catch (VEOException &e) {
-    return VEO_REQUEST_ID_INVALID;
+  auto c = ThreadContextFromC(ctx);
+  if (c->isMainThread()) {
+    return 0;
   }
+  int rv = c->close();
+  if (rv == 0) {
+    delete c;
+  }
+  return rv;
 }
-#endif /* 0 */
 
 /**
  * @brief allocate VEO arguments object (veo_args)
@@ -573,6 +581,108 @@ int veo_call_sync(veo_proc_handle *h, uint64_t addr, veo_args *ca,
   }
 }
 
+/**
+ * @brief request a VE thread to call a function
+ *
+ * @param ctx VEO context to execute the function on VE.
+ * @param addr VEMVA of the function to call
+ * @param args arguments to be passed to the function
+ * @return request ID
+ * @retval VEO_REQUEST_ID_INVALID request failed.
+ */
+uint64_t veo_call_async(veo_thr_ctxt *ctx, uint64_t addr, veo_args *args)
+{
+  try {
+    return ThreadContextFromC(ctx)->callAsync(addr, *CallArgsFromC(args));
+  } catch (VEOException &e) {
+    return VEO_REQUEST_ID_INVALID;
+  }
+}
+
+/**
+ * @brief pick up a resutl from VE function if it has finished
+ *
+ * @param ctx VEO context
+ * @param reqid request ID
+ * @param retp pointer to buffer to store the return value from the function.
+ * @retval VEO_COMMAND_OK function is successfully returned.
+ * @retval VEO_COMMAND_EXCEPTION an exception occurred on function.
+ * @retval VEO_COMMAND_ERROR an error occurred on function.
+ * @retval VEO_COMMAND_UNFINISHED function is not finished.
+ * @retval -1 internal error.
+ */
+int veo_call_peek_result(veo_thr_ctxt *ctx, uint64_t reqid, uint64_t *retp)
+{
+  try {
+    return ThreadContextFromC(ctx)->callPeekResult(reqid, retp);
+  } catch (VEOException &e) {
+    return -1;
+  }
+}
+
+/**
+ * @brief pick up a resutl from VE function
+
+ * @param ctx VEO context
+ * @param reqid request ID
+ * @param retp pointer to buffer to store the return value from the function.
+ * @retval VEO_COMMAND_OK function is successfully returned.
+ * @retval VEO_COMMAND_EXCEPTION an exception occurred on execution.
+ * @retval VEO_COMMAND_ERROR an error occurred on execution.
+ * @retval VEO_COMMAND_UNFINISHED function is not finished.
+ * @retval -1 internal error.
+ */
+int veo_call_wait_result(veo_thr_ctxt *ctx, uint64_t reqid, uint64_t *retp)
+{
+  try {
+    return ThreadContextFromC(ctx)->callWaitResult(reqid, retp);
+  } catch (VEOException &e) {
+    return -1;
+  }
+}
+
+
+#if 0
+/**
+ * @brief Asynchronously read VE memory
+ *
+ * @param ctx VEO context
+ * @param dst destination VHVA
+ * @param src source VEMVA
+ * @param size size in byte
+ * @return request ID
+ * @retval VEO_REQUEST_ID_INVALID request failed.
+ */
+uint64_t veo_async_read_mem(veo_thr_ctxt *ctx, void *dst, uint64_t src,
+                            size_t size)
+{
+  try {
+    return ThreadContextFromC(ctx)->asyncReadMem(dst, src, size);
+  } catch (VEOException &e) {
+    return VEO_REQUEST_ID_INVALID;
+  }
+}
+
+/**
+ * @brief Asynchronously write VE memory
+ *
+ * @param ctx VEO context
+ * @param dst destination VEMVA
+ * @param src source VHVA
+ * @param size size in byte
+ * @return request ID
+ * @retval VEO_REQUEST_ID_INVALID request failed.
+ */
+uint64_t veo_async_write_mem(veo_thr_ctxt *ctx, uint64_t dst, const void *src,
+                             size_t size)
+{
+  try {
+    return ThreadContextFromC(ctx)->asyncWriteMem(dst, src, size);
+  } catch (VEOException &e) {
+    return VEO_REQUEST_ID_INVALID;
+  }
+}
+#endif /* 0 */
 
 
 //@}

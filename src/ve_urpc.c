@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <assert.h>
+#include <errno.h>
 #include <sys/mman.h>
 #ifdef _OPENMP
 #include <omp.h>
@@ -37,7 +38,7 @@ static int vhshm_register(urpc_peer_t *up)
 	// the region is accessible for DMA unter its VEHVA remote_vehva
 	//
         up->shm_addr = vh_shmat(up->shm_segid, NULL, 0, (void **)&up->shm_vehva);
-	if (up->shm__addr == NULL) {
+	if (up->shm_addr == NULL) {
 		eprintf("VE: (shm_addr == NULL)\n");
 		return -ENOMEM;
 	}
@@ -82,6 +83,7 @@ urpc_peer_t *ve_urpc_init(int segid, int core)
 	urpc_peer_t *up = (urpc_peer_t *)malloc(sizeof(urpc_peer_t));
 	if (up == NULL) {
 		eprintf("unable to allocate urpc_peer struct memory\n");
+                errno = ENOMEM;
 		return NULL;
 	}
 
@@ -96,6 +98,7 @@ urpc_peer_t *ve_urpc_init(int segid, int core)
 		else {
 			eprintf("ERROR: env variable URPC_SHM_SEGID not found.\n");
 			free(up);
+                        errno = ENOENT;
 			return NULL;
 		}
 	}
@@ -128,7 +131,7 @@ urpc_peer_t *ve_urpc_init(int segid, int core)
 	err = ve_dma_init();
 	if (err) {
 		eprintf("Failed to initialize DMA\n");
-		return err;
+		return NULL;
 	}
 	char *buff_base;
 	uint64_t buff_base_vehva;
@@ -140,7 +143,8 @@ urpc_peer_t *ve_urpc_init(int segid, int core)
 	posix_memalign((void **)&buff_base, align_64mb, buff_size);
 	if (buff_base == NULL) {
 		eprintf("VE: allocating urpc mirror buffer failed! buffsize=%lu\n", buff_size);
-		return -ENOMEM;
+                errno = ENOMEM;
+		return NULL;
 	}
 	dprintf("ve allocated buff at %p\n", buff_base);
         // TODO: is this needed?
@@ -148,7 +152,8 @@ urpc_peer_t *ve_urpc_init(int segid, int core)
 	buff_base_vehva = ve_register_mem_to_dmaatb(buff_base, buff_size);
 	if (buff_base_vehva == (uint64_t)-1) {
 		eprintf("VE: mapping urpc mirror buffer failed! buffsize=%lu\n", buff_size);
-		return -ENOMEM;
+                errno = ENOMEM;
+		return NULL;
 	}
 	dprintf("ve_register_mem_to_dmaatb succeeded for %p\n", buff_base);
 

@@ -53,6 +53,9 @@ ProcHandle::ProcHandle(int venode, char *binname) : ve_number(-1)
   }
   dprintf("proc stack pointer: %p\n", (void *)this->ve_sp);
 
+  this->main_ctx = new ThreadContext(this, this->up);
+  this->main_ctx->state = VEO_STATE_RUNNING;
+
   this->ve_number = venode;
 }
 
@@ -325,6 +328,23 @@ int ProcHandle::callSync(uint64_t addr, CallArgs &args, uint64_t *result)
   return rc;
 }
 
+/**
+ * @brief open a new context (VE thread)
+ *
+ * @return a new thread context created
+ *
+ * The first context returned is the main_ctx!
+ */
+ThreadContext *ProcHandle::openContext()
+{
+  CallArgs args;
+  std::lock_guard<std::mutex> lock(this->main_mutex);
+
+  // TODO: open other contexts
+
+  return this->main_ctx;
+}
+ 
 #if 0
   
 /**

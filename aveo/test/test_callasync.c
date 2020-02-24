@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "ve_offload.h"
+#include <ve_offload.h>
 #include "urpc_time.h"
 
 int main(int argc, char *argv[])
@@ -16,50 +16,56 @@ int main(int argc, char *argv[])
         printf("proc = %p\n", (void *)proc);
         if (proc == NULL)
 		return -1;
-	//sleep(40);
         uint64_t libh = veo_load_library(proc, "./libvehello.so");
         printf("libh = %p\n", (void *)libh);
         if (libh == 0)
 		return -1;
-
         uint64_t sym = veo_get_sym(proc, libh, "hello");
         printf("'hello' sym = %p\n", (void *)sym);
         if (sym == 0)
 		return -1;
 
+        struct veo_thr_ctxt *ctx = veo_context_open(proc);
+        printf("ctx = %p\n", (void *)ctx);
+        
         struct veo_args *argp = veo_args_alloc();
-
         veo_args_set_i32(argp, 0, 42);
-
         uint64_t result = 0;
-        int rc = veo_call_sync(proc, sym, argp, &result);
-        printf("call 'hello' returned %ld, rc=%d\n", result, rc);
 
-        sym = veo_get_sym(proc, libh, "print_buffer");
-        printf("'print_buffer' sym = %p\n", (void *)sym);
+        uint64_t req = veo_call_async(ctx, sym, argp);
+        printf("call_async returned %lu\n", req);
 
-        veo_args_clear(argp);
-
-        rc = veo_call_sync(proc, sym, argp, &result);
-        printf("call 'print_buffer' returned %ld, rc=%d\n", result, rc);
+        err = veo_call_wait_result(ctx, req, &result);
+        printf("wait_result returned %d result=%lu\n", err, result);
 
         sym = veo_get_sym(proc, libh, "empty");
         printf("'empty' sym = %p\n", (void *)sym);
 
         veo_args_clear(argp);
-
         long ts, te;
-        int nloop = 100000;
+        const int nloop = 30000;
+        uint64_t reqs[nloop], res[nloop];
+
         ts = get_time_us();
         for (int i=0; i<nloop; i++) {
-          rc = veo_call_sync(proc, sym, argp, &result);
+          reqs[i] = veo_call_async(ctx, sym, argp);
+          //printf("submitted req %d\n", i);
         }
+        err = 0;
+        for (int i=0; i<nloop; i++) {
+          err += veo_call_wait_result(ctx, reqs[i], &res[i]);
+          //printf("received result req %d\n", i);
+        }
+        
         te = get_time_us();
-        printf("%d sync calls took %fs, %f us/call\n",
+        printf("%d async calls took %fs, %f us/call\n",
                nloop, (double)(te-ts)/1.e6, (double)(te-ts)/nloop);
+        printf("cumulated err=%d\n", err);
 
-        veo_args_free(argp);
 
+        err = veo_context_close(ctx);
+        printf("context_close returned %d\n", err);
+        
         err = veo_proc_destroy(proc);
         printf("veo_proc_destroy() returned %d\n", err);
 

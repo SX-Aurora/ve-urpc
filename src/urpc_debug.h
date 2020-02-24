@@ -25,12 +25,12 @@
 
 #ifdef __ve__
 #define eprintf(args...) do { \
-  fprintf(stderr, "[VE] " args); \
+  fprintf(stderr, "[VE] ERROR: " args); \
   fflush(stderr); \
   } while(0)
 #else
 #define eprintf(args...) do { \
-  fprintf(stderr, "[VH] " args); \
+  fprintf(stderr, "[VH] ERROR: " args); \
   fflush(stderr); \
   } while(0)
 #endif

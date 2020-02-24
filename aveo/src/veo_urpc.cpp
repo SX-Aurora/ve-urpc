@@ -32,9 +32,9 @@ namespace veo {
     return urpc_generic_send(up, URPC_CMD_RESULT, (char *)"L", result);
   }
 
-  int64_t send_exception_nolock(urpc_peer_t *up, int64_t exc, char *msg)
+  int64_t send_exception_nolock(urpc_peer_t *up, int64_t exc)
   {
-    return urpc_generic_send(up, URPC_CMD_EXCEPTION, (char *)"LP", exc, msg, strlen(msg) + 1);
+    return urpc_generic_send(up, URPC_CMD_EXCEPTION, (char *)"L", exc);
   }
 
   int64_t send_unloadlib_nolock(urpc_peer_t *up, const uint64_t libhndl)

@@ -191,8 +191,8 @@ typedef void (*handler_init_hook_t)(urpc_peer_t *);
 
 #ifdef __ve__
 
-int ve_urpc_init(int segid, int core);
-void ve_urpc_fini(void);
+urpc_peer_t *ve_urpc_init(int segid, int core);
+void ve_urpc_fini(urpc_peer_t *up);
 int ve_transfer_data_sync(uint64_t dst_vehva, uint64_t src_vehva, int len);
 
 #else
@@ -211,6 +211,7 @@ void urpc_set_sender_flags(urpc_comm_t *uc, uint32_t flags);
 uint32_t urpc_get_receiver_flags(urpc_comm_t *uc);
 uint32_t urpc_get_sender_flags(urpc_comm_t *uc);
 int64_t urpc_get_cmd(transfer_queue_t *tq, urpc_mb_t *m);
+int set_recv_payload(urpc_comm_t *uc, urpc_mb_t *m, void **payload, size_t *plen);
 int64_t urpc_get_cmd_timeout(transfer_queue_t *tq, urpc_mb_t *m, long timeout_us);
 int64_t urpc_next_send_slot(urpc_peer_t *up);
 int64_t urpc_put_cmd(urpc_peer_t *up, urpc_mb_t *m);

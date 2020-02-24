@@ -13,7 +13,7 @@
 #include <ve_offload.h>
 #include <urpc_common.h>
 #include "CallArgs.hpp"
-//#include "ThreadContext.hpp"
+#include "ThreadContext.hpp"
 #include "VEOException.hpp"
 
 namespace std {
@@ -38,7 +38,7 @@ private:
   std::mutex main_mutex;//!< acquire while using main_thread
   urpc_peer_t *up;	//!< ve-urpc peer pointer
   uint64_t ve_sp;       //!< stack pointer on VE side
-  //std::unique_ptr<ThreadContext> main_ctx;
+  ThreadContext *main_ctx;
   int ve_number;
 
 public:
@@ -57,7 +57,8 @@ public:
 
   int callSync(uint64_t, CallArgs &, uint64_t *);
 
-  //ThreadContext *openContext();
+  ThreadContext *mainContext() { return this->main_ctx; };
+  ThreadContext *openContext();
   
   veo_proc_handle *toCHandle() {
     return reinterpret_cast<veo_proc_handle *>(this);

@@ -2,9 +2,9 @@
 #include <string>
 #include <cstdio>
 
-#include <ve_offload.h>
+#include "ve_offload.h"
 #include "log.hpp"
-//#include "ThreadContext.hpp"
+#include "ThreadContext.hpp"
 
 extern "C" {
 log4c_category_t *cat_pseudo_core;
@@ -47,5 +47,5 @@ static void veo_log_init(void)
 {
   log4c_init();
   veo::log::log_category_ = log4c_category_get(VEO_LOG_CATEGORY);
-  cat_pseudo_core = log4c_category_get("veos.veo");
+  cat_pseudo_core = log4c_category_get("veos.veo.pseudo");
 }

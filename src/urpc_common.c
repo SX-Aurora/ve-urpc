@@ -274,7 +274,7 @@ int64_t urpc_put_cmd(urpc_peer_t *up, urpc_mb_t *m)
 }
 
 
-static int set_recv_payload(urpc_comm_t *uc, urpc_mb_t *m, void **payload, size_t *plen)
+int set_recv_payload(urpc_comm_t *uc, urpc_mb_t *m, void **payload, size_t *plen)
 {
 	transfer_queue_t *tq = uc->tq;
 	int err;

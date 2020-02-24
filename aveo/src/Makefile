@@ -10,7 +10,7 @@ DEFINES := -DVEORUN_BIN=\"$(VEORUN_BIN)\"
 GPPFLAGS := $(GPPFLAGS) $(DEFINES)
 LDFLAGS := -Wl,-rpath,$(abspath $(DEST)/lib) -Wl,-rpath,$(abspath $(BLIB)) -L$(BLIB)
 
-VHLIB_OBJS := $(addprefix $(BVH)/,ProcHandle.o CallArgs.o veo_api.o veo_urpc.o log.o)
+VHLIB_OBJS := $(addprefix $(BVH)/,ProcHandle.o ThreadContext.o Command.o CallArgs.o veo_api.o veo_urpc.o log.o)
 VELIB_OBJS := $(addprefix $(BVE)/,veo_urpc.o)
 LIBS = $(addprefix $(BLIB)/,libveoVE.so libveoVH.so libveoVE.a libveoVH.a)
 INCLUDES := ve_offload.h
@@ -27,7 +27,7 @@ ALL: $(LIBS) $(BB)/aveorun
 install: $(LIBS) | $(DEST)/lib/ $(DEST)/include/ $(dir $(VEORUN_BIN))/
 	cp -p $(LIBS) $(DEST)/lib
 	cp -p $(INCLUDES) $(DEST)/include
-	cp -p $(BB)/veorun $(VEORUN_BIN)
+	cp -p $(BB)/aveorun $(VEORUN_BIN)
 
 
 %/ProcHandle.o: ProcHandle.cpp ProcHandle.hpp VEOException.hpp veo_urpc.hpp CallArgs.hpp log.hpp
@@ -41,11 +41,11 @@ install: $(LIBS) | $(DEST)/lib/ $(DEST)/include/ $(dir $(VEORUN_BIN))/
 .SECONDEXPANSION:
 
 $(BLIB)/libveoVE.so: $(VELIB_OBJS) | $$(@D)/
-	$(NCPP) -Wl,-zdefs $(NCPPFLAGS) -fpic -shared -o $@ $^ \
+	$(NCPP) $(NCPPFLAGS) -fpic -shared -o $@ $^ \
 		$(LDFLAGS) -lurpcVE -lveio -ldl
 
 $(BLIB)/libveoVH.so: $(VHLIB_OBJS) | $$(@D)/
-	$(GPP) -Wl,-zdefs $(GPPFLAGS) -fpic -shared -o $@ $^ \
+	$(GPP) $(GPPFLAGS) -fpic -shared -o $@ $^ \
 		$(LDFLAGS) -lurpcVH -llog4c -ldl
 
 $(BLIB)/libveoVE.a: $(VELIB_OBJS) | $$(@D)/
@@ -56,7 +56,7 @@ $(BLIB)/libveoVH.a: $(VHLIB_OBJS) | $$(@D)/
 
 
 $(BB)/aveorun: $(BVE)/aveorun.o | $$(@D)/
-	$(NCPP) $(NCPPFLAGS) -o $@ $^ $(LDFLAGS) -L. -lveoVE -L.. -lurpcVE -lveio -lpthread
+	$(NCPP) $(NCPPFLAGS) -traceback -o $@ $^ $(LDFLAGS) -L. -lveoVE -L$(BLIB) -lurpcVE -lveio -lpthread -ldl
 
 
 $(BVE)/veo_urpc.o: veo_urpc.cpp
@@ -74,6 +74,8 @@ $(BVH)/%.o: %.cpp | $$(@D)/
 $(BVE)/%.o: %.cpp | $$(@D)/
 	$(NCPP) $(NCPPFLAGS) -fpic -o $@ -c $<
 
+$(BVE)/aveorun.o: aveorun.cpp | $$(@D)/
+	$(NCPP) $(NCPPFLAGS) -traceback -fpic -o $@ -c $<
 
 clean:
 	rm -f $(VHLIB_OBJS) $(VELIB_OBJS) $(VELIB_OBJS_OMP) $(LIBS) $(BB)/aveorun

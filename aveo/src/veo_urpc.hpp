@@ -85,6 +85,7 @@ static inline int pickup_acks(urpc_peer_t *up, int acks)
 void send_ping_nolock(urpc_peer_t *up);
 int64_t send_ack_nolock(urpc_peer_t *up);
 int64_t send_result_nolock(urpc_peer_t *up, int64_t result);
+int64_t send_exception_nolock(urpc_peer_t *up, int64_t exc);
 
 int64_t send_read_mem_nolock(urpc_peer_t *up, uint64_t src, size_t size);
 int64_t send_write_mem_nolock(urpc_peer_t *up, uint64_t dst, size_t size, void *buff, size_t bsz);
@@ -95,7 +96,7 @@ int wait_req_ack(urpc_peer_t *up, int64_t req);
 #ifndef __ve__
 int64_t send_call_nolock(urpc_peer_t *up, uint64_t ve_sp, uint64_t addr,
                          CallArgs &arg);
-int unpack_call_result(urpc_mb_t &m, CallArgs &arg, void *payload, size_t plen,
+int unpack_call_result(urpc_mb_t *m, CallArgs *arg, void *payload, size_t plen,
                        uint64_t *result);
 #endif
 
