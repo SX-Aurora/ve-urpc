@@ -45,6 +45,7 @@ void veo__log(const ThreadContext *ctx, const log4c_location_info_t *loc,
 __attribute__((constructor))
 static void veo_log_init(void)
 {
+  log4c_init();
   veo::log::log_category_ = log4c_category_get(VEO_LOG_CATEGORY);
   cat_pseudo_core = log4c_category_get("veos.veo");
 }

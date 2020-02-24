@@ -318,7 +318,7 @@ int ProcHandle::callSync(uint64_t addr, CallArgs &args, uint64_t *result)
     return -1;
   }
 
-  int rc = unpack_call_result(m, args, payload, plen, result);
+  int rc = unpack_call_result(&m, &args, payload, plen, result);
   
   urpc_slot_done(this->up->recv.tq, REQ2SLOT(req), &m);
 

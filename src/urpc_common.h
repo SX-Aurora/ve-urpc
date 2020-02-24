@@ -178,6 +178,9 @@ struct urpc_peer {
 	int shm_key, shm_segid;
 	size_t shm_size;
 	void *shm_addr;
+#ifdef __ve__
+	uint64_t shm_vehva;
+#endif
 	int shm_destroyed;
 	pthread_mutex_t lock;
 	pid_t child_pid;
@@ -209,6 +212,7 @@ uint32_t urpc_get_receiver_flags(urpc_comm_t *uc);
 uint32_t urpc_get_sender_flags(urpc_comm_t *uc);
 int64_t urpc_get_cmd(transfer_queue_t *tq, urpc_mb_t *m);
 int64_t urpc_get_cmd_timeout(transfer_queue_t *tq, urpc_mb_t *m, long timeout_us);
+int64_t urpc_next_send_slot(urpc_peer_t *up);
 int64_t urpc_put_cmd(urpc_peer_t *up, urpc_mb_t *m);
 int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...);
 void urpc_slot_done(transfer_queue_t *tq, int slot, urpc_mb_t *m);

@@ -29,19 +29,20 @@ enum veo_urpc_cmd
 	URPC_CMD_ACK           =  3, // ACK is a result with no (void) content
 	URPC_CMD_RESULT        =  4, // result (int64_t) without cache
 	URPC_CMD_RESCACHE      =  5, // result with cache
-	URPC_CMD_LOADLIB       =  6, // load .so
-	URPC_CMD_UNLOADLIB     =  7, // unload .so
-	URPC_CMD_GETSYM        =  8, // find symbol in .so
-	URPC_CMD_ALLOC         =  9, // allocate buffer on VE
-	URPC_CMD_FREE          = 10, // free buffer on VE
-	URPC_CMD_SENDBUFF      = 11, 
-	URPC_CMD_RECVBUFF      = 12,
-	URPC_CMD_SENDFRAG      = 13,
-	URPC_CMD_CALL          = 14, // simple call with no stack transfer
-	URPC_CMD_CALL_STKIN    = 15, // call with stack "IN" only
-	URPC_CMD_CALL_STKINOUT = 16, // call with stack IN and OUT
-	URPC_CMD_SLEEPING      = 17, // notify peer that we're going to sleep
-	URPC_CMD_NEWPEER       = 18  // create new remote peer (AKA context) inside same proc
+        URPC_CMD_EXCEPTION     =  6, // notify about exception
+	URPC_CMD_LOADLIB       =  7, // load .so
+	URPC_CMD_UNLOADLIB     =  8, // unload .so
+	URPC_CMD_GETSYM        =  9, // find symbol in .so
+	URPC_CMD_ALLOC         = 10, // allocate buffer on VE
+	URPC_CMD_FREE          = 11, // free buffer on VE
+	URPC_CMD_SENDBUFF      = 12, 
+	URPC_CMD_RECVBUFF      = 13,
+	URPC_CMD_SENDFRAG      = 14,
+	URPC_CMD_CALL          = 15, // simple call with no stack transfer
+	URPC_CMD_CALL_STKIN    = 16, // call with stack "IN" only
+	URPC_CMD_CALL_STKINOUT = 17, // call with stack IN and OUT
+	URPC_CMD_SLEEPING      = 18, // notify peer that we're going to sleep
+	URPC_CMD_NEWPEER       = 19  // create new remote peer (AKA context) inside same proc
 };
 
 enum veo_urpc_call_flags

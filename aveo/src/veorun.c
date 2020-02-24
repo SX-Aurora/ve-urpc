@@ -1,7 +1,6 @@
 #include <stdio.h>
 
-#include "urpc_common.h"
-//#include "veo_urpc.h"
+#include <urpc_common.h>
 
 int main()
 {

@@ -209,8 +209,24 @@ void urpc_slot_done(transfer_queue_t *tq, int slot, urpc_mb_t *m)
 }
 
 /*
-  Write mlist entry for chosen slot.
+  Check if next send request slot is available/free.
 */
+int64_t urpc_next_send_slot(urpc_peer_t *up)
+{
+	urpc_comm_t *uc = &up->send;
+	transfer_queue_t *tq = uc->tq;
+	int slot = -1;
+	urpc_mb_t next;
+	int64_t req = TQ_READ64(tq->last_put_req) + 1;
+
+	TQ_FENCE();
+	slot = REQ2SLOT(req);
+	next.u64 = TQ_READ64(tq->mb[slot].u64);
+	TQ_FENCE();
+	if (next.c.cmd == URPC_CMD_NONE)
+		return req;
+	return -1;
+}
 
 
 /*

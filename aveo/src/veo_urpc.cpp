@@ -32,6 +32,11 @@ namespace veo {
     return urpc_generic_send(up, URPC_CMD_RESULT, (char *)"L", result);
   }
 
+  int64_t send_exception_nolock(urpc_peer_t *up, int64_t exc, char *msg)
+  {
+    return urpc_generic_send(up, URPC_CMD_EXCEPTION, (char *)"LP", exc, msg, strlen(msg) + 1);
+  }
+
   int64_t send_unloadlib_nolock(urpc_peer_t *up, const uint64_t libhndl)
   {
     return urpc_generic_send(up, URPC_CMD_UNLOADLIB, (char *)"L", libhndl);
@@ -132,26 +137,34 @@ namespace veo {
   }
 
   
-  int unpack_call_result(urpc_mb_t &m, CallArgs &arg, void *payload, size_t plen, uint64_t *result)
+  int unpack_call_result(urpc_mb_t *m, CallArgs *arg, void *payload, size_t plen, uint64_t *result)
   {
     int rc;
 
-    if (m.c.cmd == URPC_CMD_RESULT) {
+    if (m->c.cmd == URPC_CMD_RESULT) {
       if (plen) {
         rc =urpc_unpack_payload(payload, plen, (char *)"L", (int64_t *)result);
       } else {
         eprintf("call result message had no payload!?");
       }
-    } else if (m.c.cmd == URPC_CMD_RESCACHE) {
+    } else if (m->c.cmd == URPC_CMD_RESCACHE) {
       void *stack_buf;
       rc = urpc_unpack_payload(payload, plen, (char *)"LP", (int64_t *)result,
-                               &stack_buf, &arg.stack_size);
+                               &stack_buf, &arg->stack_size);
       if (rc == 0) {
-        memcpy(arg.stack_buf.get(), stack_buf, arg.stack_size);
-        arg.copyout();
+        memcpy(arg->stack_buf.get(), stack_buf, arg->stack_size);
+        arg->copyout();
       }
+    } else if (m->c.cmd == URPC_CMD_EXCEPTION) {
+      uint64_t exc;
+      char *msg;
+      size_t msglen;
+      rc =urpc_unpack_payload(payload, plen, (char *)"LP", &exc, (void *)&msg, &msglen);
+      eprintf("VE exception %d\n%s\n", exc, msg);
+      *result = exc;
+      rc = -4;
     } else {
-      eprintf("callSync: expected RESULT or RESCACHE, got cmd=%d\n", m.c.cmd);
+      eprintf("callSync: expected RESULT or RESCACHE, got cmd=%d\n", m->c.cmd);
       rc = -3;
     }
   return rc;

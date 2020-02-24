@@ -16,41 +16,33 @@
 
 #include "urpc_common.h"
 
-int shm_key, shm_segid;
-uint64_t shm_vehva = 0;		// VEHVA of remote shared memory segment
-size_t shm_size = 0;		// remote shared memory segment size
-void *shm_remote_addr = NULL;	// remote address
-
 // The following variables are thread local because each Context Thread can be a peer!
 //__thread int this_peer = -1;			// local peer ID
 //__thread struct ve_udma_peer *udma_peer;	// this peer's UDMA comm struct
 
-urpc_peer_t ve_local_up_;
-
 /*
   Initialize VH-SHM segment, map it as VEHVA.
 */
-static int vhshm_register(int segid)
+static int vhshm_register(urpc_peer_t *up)
 {
 	struct shmid_ds ds;
 	uint64_t remote_vehva = 0;
 	void *remote_addr = NULL;
 	int err = 0;
 
-        shm_segid = segid;
-	dprintf("VE: shm_segid = %d\n", shm_segid);
+	dprintf("VE: shm_segid = %d\n", up->shm_segid);
 
 	//
 	// attach shared memory VH address space and register it to DMAATB,
 	// the region is accessible for DMA unter its VEHVA remote_vehva
 	//
-        shm_remote_addr = vh_shmat(shm_segid, NULL, 0, (void **)&shm_vehva);
-	if (shm_remote_addr == NULL) {
-		eprintf("VE: (shm_remote_addr == NULL)\n");
+        up->shm_addr = vh_shmat(up->shm_segid, NULL, 0, (void **)&up->shm_vehva);
+	if (up->shm__addr == NULL) {
+		eprintf("VE: (shm_addr == NULL)\n");
 		return -ENOMEM;
 	}
-	if (shm_vehva == (uint64_t)-1) {
-		eprintf("VE: failed to attach to shm segment %d, shm_vehva=-1\n", shm_segid);
+	if (up->shm_vehva == (uint64_t)-1) {
+		eprintf("VE: failed to attach to shm segment %d, shm_vehva=-1\n", up->shm_segid);
 		return -ENOMEM;
 	}
 	return 0;
@@ -83,11 +75,15 @@ static void ve_urpc_comm_init(urpc_comm_t *uc)
 }
 
 // TODO: add pinning to a VE core!
-int ve_urpc_init(int segid, int core)
+urpc_peer_t *ve_urpc_init(int segid, int core)
 {
-	urpc_peer_t *up = &ve_local_up_;
 	int err = 0;
 	char *e;
+	urpc_peer_t *up = (urpc_peer_t *)malloc(sizeof(urpc_peer_t));
+	if (up == NULL) {
+		eprintf("unable to allocate urpc_peer struct memory\n");
+		return NULL;
+	}
 
         //
 	// shm_segid is either in argument or in environment variable
@@ -99,25 +95,24 @@ int ve_urpc_init(int segid, int core)
 			up->shm_segid = atol(e);
 		else {
 			eprintf("ERROR: env variable URPC_SHM_SEGID not found.\n");
-			return -ENOENT;
-		}
-	}
-
-	// find and register shm segment, if not done, yet
-	if (shm_vehva == 0) {
-		err = vhshm_register(up->shm_segid);
-		if (err) {
 			free(up);
-			up = NULL;
-			eprintf("VE: vh_shm_register failed, err=%d.\n", err);
-			return err;
+			return NULL;
 		}
 	}
 
-	up->recv.tq = (transfer_queue_t *)(shm_vehva);
-	up->send.tq = (transfer_queue_t *)(shm_vehva + URPC_BUFF_LEN);
-        up->recv.shm_data_vehva = shm_vehva + offsetof(transfer_queue_t, data);
-        up->send.shm_data_vehva = shm_vehva + URPC_BUFF_LEN
+	// find and register shm segment
+	err = vhshm_register(up);
+	if (err) {
+		free(up);
+		up = NULL;
+		eprintf("VE: vh_shm_register failed, err=%d.\n", err);
+		return NULL;
+	}
+
+	up->recv.tq = (transfer_queue_t *)(up->shm_vehva);
+	up->send.tq = (transfer_queue_t *)(up->shm_vehva + URPC_BUFF_LEN);
+        up->recv.shm_data_vehva = up->shm_vehva + offsetof(transfer_queue_t, data);
+        up->send.shm_data_vehva = up->shm_vehva + URPC_BUFF_LEN
 		+ offsetof(transfer_queue_t, data);
 
 	ve_urpc_comm_init(&up->send);
@@ -174,30 +169,30 @@ int ve_urpc_init(int segid, int core)
 		hook(up);
         }
 
-	return 0;
+	return up;
 }
 
-void ve_urpc_fini(void)
+void ve_urpc_fini(urpc_peer_t *up)
 {
-	urpc_peer_t *up = &ve_local_up_;
 	int err;
 
 	// unregister local buffer from DMAATB
-	err = ve_unregister_mem_from_dmaatb(up->recv.mirr_data_vehva
-					    - offsetof(transfer_queue_t, data));
+	err = ve_unregister_mem_from_dmaatb(up->recv.mirr_data_vehva -
+					    offsetof(transfer_queue_t, data));
 	if (err)
 		eprintf("VE: Failed to unregister local buffer from DMAATB\n");
 
 	// detach VH sysV shm segment
-	if (shm_remote_addr) {
-		err = vh_shmdt(shm_remote_addr);
+	if (up->shm_addr) {
+		err = vh_shmdt(up->shm_addr);
 		if (err)
 			eprintf("VE: Failed to detach from VH sysV shm\n");
 		else {
-			shm_remote_addr = NULL;
-			shm_vehva = 0;
+			up->shm_addr = NULL;
+			up->shm_vehva = 0;
 		}
 	}
+	free(up);
 }
 
 /*
