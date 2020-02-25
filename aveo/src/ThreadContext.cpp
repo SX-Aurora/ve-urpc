@@ -54,7 +54,7 @@ int ThreadContext::close()
 {
   if ( this->state == VEO_STATE_EXIT )
     return 0;
-
+  // not closing a main thread, just ignoring the request
   if (this->isMainThread())
     return 0;
 
@@ -139,8 +139,32 @@ void ThreadContext::_progress_nolock(int ops)
  */
 void ThreadContext::progress(int ops)
 {
-  std::lock_guard<std::mutex> lock(this->req_mtx);
+  std::lock_guard<std::mutex> lock(this->submit_mtx);
   _progress_nolock(ops);
+}
+
+/**
+ * @brief Synchronize this context.
+ *
+ * Block other threads from submitting requests to this context,
+ * call progress() until request queue and inflight queues are empty.
+ */
+void ThreadContext::synchronize()
+{
+  std::lock_guard<std::mutex> lock(this->submit_mtx);
+  this->_synchronize_nolock();
+}
+  
+/**
+ * @brief The actual synchronize work function
+ *
+ * This function should only be called with the main_mutex locked!
+ */
+void ThreadContext::_synchronize_nolock()
+{
+  while(!(this->comq.emptyRequest() && this->comq.emptyInFlight())) {
+    this->_progress_nolock(0);
+  }
 }
 
 /**

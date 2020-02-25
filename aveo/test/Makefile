@@ -8,7 +8,8 @@ GCCFLAGS := $(GCCFLAGS) -I../src
 LDFLAGS = -Wl,-zdefs -Wl,-rpath,$(abspath $(DEST)/lib) -Wl,-rpath,$(abspath $(BLIB)) -L$(BLIB)
 
 TESTS = $(addprefix $(BB)/,test_callsync test_callasync test_stackargs test_nprocs \
- test_veexcept bandwidth_veo latency libvehello.so libvestackargs.so libveexcept.so)
+ test_veexcept bandwidth latency call_latency test_getsym \
+ libvehello.so libvestackargs.so libveexcept.so)
 
 
 ALL: $(TESTS)

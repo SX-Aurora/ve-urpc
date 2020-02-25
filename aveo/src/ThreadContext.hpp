@@ -34,9 +34,12 @@ private:
   urpc_peer_t *up;		//!< ve-urpc peer pointer, each ctx has one
   std::unordered_set<uint64_t> rem_reqid;
   std::mutex req_mtx;
+  std::mutex submit_mtx;
 
   void _progress_nolock(int ops);
   void progress(int ops);
+  void _synchronize_nolock();
+  void synchronize();
   /**
    * @brief Issue a new request ID
    * @return a request ID, 64 bit integer, to identify a command

@@ -35,11 +35,12 @@ class ProcHandle {
 private:
   std::unordered_map<std::pair<uint64_t, std::string>, uint64_t> sym_name;
   std::mutex sym_mtx;
-  std::mutex main_mutex;//!< acquire while using main_thread
-  urpc_peer_t *up;	//!< ve-urpc peer pointer
-  uint64_t ve_sp;       //!< stack pointer on VE side
-  ThreadContext *main_ctx;
-  int ve_number;
+  std::mutex main_mutex;		//!< acquire when opening a new context
+  std::vector<ThreadContext *> ctx;	//!< vector of opened contexts
+  urpc_peer_t *up;			//!< ve-urpc peer pointer
+  uint64_t ve_sp;       		//!< stack pointer on VE side
+  ThreadContext *main_ctx;		//!< context also used for sync proc ops
+  int ve_number;			//!< store the VE number
 
 public:
   ProcHandle(int, char *);

@@ -44,6 +44,9 @@ ProcHandle::ProcHandle(int venode, char *binname) : ve_number(-1)
     throw VEOException("ProcHandle: timeout while waiting for VE.");
   }
 
+  this->main_ctx = new ThreadContext(this, this->up);
+  this->ctx.push_back(this->main_ctx);
+
   // The sync call returns the stack pointer from inside the VE kernel
   // call handler if the function address passed is 0.
   CallArgs args;
@@ -53,7 +56,6 @@ ProcHandle::ProcHandle(int venode, char *binname) : ve_number(-1)
   }
   dprintf("proc stack pointer: %p\n", (void *)this->ve_sp);
 
-  this->main_ctx = new ThreadContext(this, this->up);
   this->main_ctx->state = VEO_STATE_RUNNING;
 
   this->ve_number = venode;
@@ -66,7 +68,7 @@ ProcHandle::ProcHandle(int venode, char *binname) : ve_number(-1)
 int ProcHandle::exitProc()
 {
   // TODO: proper lock
-  std::lock_guard<std::mutex> lock(this->main_mutex);
+  std::lock_guard<std::mutex> lock(this->main_ctx->submit_mtx);
   VEO_TRACE(nullptr, "%s()", __func__);
   // TODO: send exit urpc command
   //
@@ -96,7 +98,7 @@ int ProcHandle::exitProc()
  */
 uint64_t ProcHandle::loadLibrary(const char *libname)
 {
-  std::lock_guard<std::mutex> lock(this->main_mutex);
+  std::lock_guard<std::mutex> lock(this->main_ctx->submit_mtx);
   VEO_TRACE(nullptr, "%s(%s)", __func__, libname);
   size_t len = strlen(libname);
   if (len > VEO_SYMNAME_LEN_MAX) {
@@ -128,7 +130,8 @@ uint64_t ProcHandle::loadLibrary(const char *libname)
  */
 uint64_t ProcHandle::getSym(const uint64_t libhdl, const char *symname)
 {
-  std::lock_guard<std::mutex> lock(this->main_mutex);
+  std::lock_guard<std::mutex> lock(this->main_ctx->submit_mtx);
+  this->main_ctx->_synchronize_nolock();
   size_t len = strlen(symname);
   if (len > VEO_SYMNAME_LEN_MAX) {
     throw VEOException("Too long name", ENAMETOOLONG);
@@ -173,7 +176,8 @@ uint64_t ProcHandle::getSym(const uint64_t libhdl, const char *symname)
  */
 uint64_t ProcHandle::allocBuff(const size_t size)
 {
-  std::lock_guard<std::mutex> lock(this->main_mutex);
+  std::lock_guard<std::mutex> lock(this->main_ctx->submit_mtx);
+  this->main_ctx->_synchronize_nolock();
   uint64_t req = urpc_generic_send(up, URPC_CMD_ALLOC, (char *)"L", size);
 
   uint64_t addr = 0;
@@ -189,7 +193,8 @@ uint64_t ProcHandle::allocBuff(const size_t size)
  */
 void ProcHandle::freeBuff(const uint64_t buff)
 {
-  std::lock_guard<std::mutex> lock(this->main_mutex);
+  std::lock_guard<std::mutex> lock(this->main_ctx->submit_mtx);
+  this->main_ctx->_synchronize_nolock();
   uint64_t req = urpc_generic_send(up, URPC_CMD_FREE, (char *)"L", buff);
   wait_req_ack(this->up, req);
 }
@@ -203,7 +208,8 @@ void ProcHandle::freeBuff(const uint64_t buff)
  */
 int ProcHandle::readMem(void *dst, uint64_t src, size_t size)
 {
-  std::lock_guard<std::mutex> lock(this->main_mutex);
+  std::lock_guard<std::mutex> lock(this->main_ctx->submit_mtx);
+  this->main_ctx->_synchronize_nolock();
   VEO_TRACE(nullptr, "readMem(%p, %#lx, %ld)", dst, src, size);
 
   auto req = send_read_mem_nolock(this->up, src, size);
@@ -250,7 +256,8 @@ int ProcHandle::readMem(void *dst, uint64_t src, size_t size)
  */
 int ProcHandle::writeMem(uint64_t dst, const void *src, size_t size)
 {
-  std::lock_guard<std::mutex> lock(this->main_mutex);
+  std::lock_guard<std::mutex> lock(this->main_ctx->submit_mtx);
+  this->main_ctx->_synchronize_nolock();
   VEO_TRACE(nullptr, "writeMem(%#lx, %p, %ld)", dst, src, size);
 
   size_t psz;
@@ -308,7 +315,8 @@ int ProcHandle::callSync(uint64_t addr, CallArgs &args, uint64_t *result)
   void *payload;
   size_t plen;
 
-  std::lock_guard<std::mutex> lock(this->main_mutex);
+  std::lock_guard<std::mutex> lock(this->main_ctx->submit_mtx);
+  this->main_ctx->_synchronize_nolock();
   VEO_TRACE(nullptr, "%s(%#lx, ...)", __func__, addr);
   VEO_DEBUG(nullptr, "VE function = %p", (void *)addr);
 
@@ -337,48 +345,10 @@ int ProcHandle::callSync(uint64_t addr, CallArgs &args, uint64_t *result)
  */
 ThreadContext *ProcHandle::openContext()
 {
-  CallArgs args;
   std::lock_guard<std::mutex> lock(this->main_mutex);
 
   // TODO: open other contexts
-
   return this->main_ctx;
 }
  
-#if 0
-  
-/**
- * @brief open a new context (VE thread)
- *
- * @return a new thread context created
- */
-ThreadContext *ProcHandle::openContext()
-{
-  CallArgs args;
-  std::lock_guard<std::mutex> lock(this->main_mutex);
-
-  auto ctx = this->worker.get();
-  pthread_mutex_lock(&tid_counter_mutex);
-  /* FIXME */
-  int max_cpu_num = 8;
-  if (tid_counter > max_cpu_num - 1) { /* FIXME */
-    args.set(0, getnumChildThreads()%max_cpu_num);// same as worker thread
-    VEO_DEBUG(ctx, "num_child_threads = %d", getnumChildThreads());
-  } else {
-    args.set(0, -1);// any cpu
-    VEO_DEBUG(ctx, "num_child_threads = %d", getnumChildThreads());
-  }
-  pthread_mutex_unlock(&tid_counter_mutex);
-  auto reqid = ctx->_callOpenContext(this, this->funcs.create_thread, args);
-  uintptr_t ret;
-  int rv = ctx->callWaitResult(reqid, &ret);
-  if (rv != VEO_COMMAND_OK) {
-    VEO_ERROR(ctx, "openContext failed (%d)", rv);
-    throw VEOException("request failed", ENOSYS);
-  }
-  return reinterpret_cast<ThreadContext *>(ret);
-}
-
-#endif
-
 } // namespace veo
