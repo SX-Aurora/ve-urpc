@@ -150,6 +150,7 @@ struct urpc_comm {
 	uint32_t free_end;	// offset of end of free block
 	transfer_queue_t *tq;	// communication buffer in shared memory segment
 #ifdef __ve__
+	//dma_handler_t dhq;		// handles async DMA transfers
 	uint64_t shm_data_vehva;	// start of payload buffer space in shm segment vehva
 	uint64_t mirr_data_vehva;	// VEHVA address of VE mirror buffer to payload buffer
 	void *mirr_data_buff;		// virtual address of VE mirror buffer

@@ -376,9 +376,17 @@ extern "C" {
     // TODO: lock send comm
     char *s = (char *)src;
     int acks = 0;
+    size_t maxfrag = PART_SENDFRAG;
+    if (size < PART_SENDFRAG * 4)
+      if (size > 120 * 1024)
+        maxfrag = ALIGN8B(size / 2);
+      else if (size > 240 * 1024)
+        maxfrag = ALIGN8B(size / 3);
+      else if (size > 512 * 1024)
+        maxfrag = ALIGN8B(size / 4);
     while (size > 0) {
       size_t psz;
-      psz = size <= MAX_SENDFRAG ? size : PART_SENDFRAG;
+      psz = size <= maxfrag ? size : maxfrag;
       dprintf("readmem_handler psz=%ld\n", psz);
       int64_t new_req = urpc_generic_send(up, URPC_CMD_SENDFRAG, (char *)"P",
                                           (void *)s, psz);

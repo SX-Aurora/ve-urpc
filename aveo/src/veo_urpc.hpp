@@ -11,10 +11,8 @@ using veo::CallArgs;
 // reply timeout in us
 #define REPLY_TIMEOUT 2000000
 
-// maximum SEND/RECVFRAG transfer size
-#define MAX_SENDFRAG ALIGN8B((URPC_DATA_BUFF_LEN * 8) / 10 )
 // multipart SEND/RECVFRAG transfer size
-#define PART_SENDFRAG ALIGN8B(URPC_DATA_BUFF_LEN >> 1)
+#define PART_SENDFRAG ALIGN8B(URPC_DATA_BUFF_LEN >> 3)
 
 namespace veo {
 
