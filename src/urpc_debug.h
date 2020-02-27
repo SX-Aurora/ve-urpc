@@ -7,13 +7,13 @@
 
 #ifdef __ve__
 #define dprintf(args...) do { \
-  printf("[VE] " args); \
-  fflush(stdout); \
+    fprintf(stdout, "[VE] " args);               \
+    fflush(stdout);                              \
   } while(0)
 #else
 #define dprintf(args...) do { \
-  printf("[VH] " args); \
-  fflush(stdout); \
+    fprintf(stdout, "[VH] " args);              \
+    fflush(stdout);                             \
   } while(0)
 #endif
 
@@ -25,13 +25,13 @@
 
 #ifdef __ve__
 #define eprintf(args...) do { \
-  fprintf(stderr, "[VE] ERROR: " args); \
-  fflush(stderr); \
+    fprintf(stdout, "[VE] ERROR: " args);       \
+    fflush(stdout);                             \
   } while(0)
 #else
 #define eprintf(args...) do { \
-  fprintf(stderr, "[VH] ERROR: " args); \
-  fflush(stderr); \
+    fprintf(stdout, "[VH] ERROR: " args);       \
+    fflush(stdout);                             \
   } while(0)
 #endif
 

@@ -16,6 +16,8 @@
 #include <vedma.h>
 
 #include "urpc_common.h"
+#include "urpc_time.h"
+
 
 // The following variables are thread local because each Context Thread can be a peer!
 //__thread int this_peer = -1;			// local peer ID
@@ -119,6 +121,8 @@ urpc_peer_t *ve_urpc_init(int segid, int core)
 		+ offsetof(transfer_queue_t, data);
 
 	ve_urpc_comm_init(&up->send);
+        init_dma_handler(&up->send);
+        init_dma_handler(&up->recv);
 
 	// pinning to VE core must happen before initializing UDMA
 	if (core < 0 && (e = getenv("URPC_VE_CORE")) != NULL) {
@@ -213,3 +217,59 @@ int ve_transfer_data_sync(uint64_t dst_vehva, uint64_t src_vehva, int len)
 	err = ve_dma_post_wait(dst_vehva, src_vehva, len);
 	return err;
 }
+
+/*
+  URPC progress function.
+
+  Process at most 'ncmds' requests from the RECV communicator.
+  Return number of requests processed, -1 if error
+*/
+int ve_urpc_recv_progress(urpc_peer_t *up, int ncmds)
+{
+	int64_t req, dhq_req;
+	int done = 0;
+	urpc_mb_t m;
+
+	do {
+		done = 0;
+		// recv part
+		for (int i = 0; i < ncmds; i++) {
+			req = urpc_get_cmd(up->recv.tq, &m);
+			if (req < 0)
+				break;
+			dhq_req = dhq_cmd_in(&up->recv, &m, 1);
+			if (dhq_req != req) {
+				eprintf("call_handler sp send failed, req mismatch.\n");
+				return -1;
+			}
+			done++;
+		}
+		done += dhq_dma_submit(&up->recv, 1);
+		done += dhq_cmd_check_done(&up->recv, 1);
+		done += dhq_cmd_handle(up, 1);
+		// send part
+		done += dhq_dma_submit(&up->send, 0);
+		done += dhq_cmd_check_done(&up->send, 0);
+		done += dhq_cmd_handle(up, 0);
+	} while (done > 0);
+	return done;
+}
+
+/*
+  Progress loop with timeout.
+*/
+int ve_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us)
+{
+	long done_ts = 0;
+	do {
+		int done = ve_urpc_recv_progress(up, ncmds);
+		if (done == 0) {
+			if (done_ts == 0)
+				done_ts = get_time_us();
+		} else
+			done_ts = 0;
+
+	} while (done_ts == 0 || timediff_us(done_ts) < timeout_us);
+
+}
+

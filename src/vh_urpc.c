@@ -16,6 +16,7 @@
 
 #include "vh_shm.h"
 #include "urpc_common.h"
+#include "urpc_time.h"
 
 static int _urpc_num_peers = 0;
 
@@ -199,4 +200,57 @@ int vh_urpc_child_destroy(urpc_peer_t *up)
 		up->child_pid = -1;
 	}
 	return rc;
+}
+
+int vh_urpc_recv_progress(urpc_peer_t *up, int ncmds)
+{
+	urpc_comm_t *uc = &up->recv;
+	transfer_queue_t *tq = uc->tq;
+	urpc_handler_func func = NULL;
+	int err = 0, done = 0;
+	urpc_mb_t m;
+	void *payload = NULL;
+	size_t plen = 0;
+
+	while (done < ncmds) {
+		int64_t req = urpc_get_cmd(tq, &m);
+		if (req < 0)
+			break;
+		//
+		// set/receive payload, if needed
+		//
+		set_recv_payload(uc, &m, &payload, &plen);
+		//
+		// call handler
+		//
+		func = up->handler[m.c.cmd];
+		if (func) {
+			err = func(up, &m, req, payload, plen);
+			if (err)
+				eprintf("Warning: RPC handler %d returned %d\n",
+					m.c.cmd, err);
+		}
+
+		urpc_slot_done(tq, REQ2SLOT(req), &m);
+		++done;
+	}
+	return done;
+}
+
+/*
+  Progress loop with timeout.
+*/
+int vh_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us)
+{
+	long done_ts = 0;
+	do {
+		int done = vh_urpc_recv_progress(up, ncmds);
+		if (done == 0) {
+			if (done_ts == 0)
+				done_ts = get_time_us();
+		} else
+			done_ts = 0;
+
+	} while (done_ts == 0 || timediff_us(done_ts) < timeout_us);
+
 }

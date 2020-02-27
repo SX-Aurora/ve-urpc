@@ -43,7 +43,7 @@ int main(int argc, char *argv[])
 
         veo_args_clear(argp);
         long ts, te;
-        const int nloop = 30000;
+        const int nloop = 10000;
         uint64_t reqs[nloop], res[nloop];
 
         ts = get_time_us();
@@ -52,8 +52,10 @@ int main(int argc, char *argv[])
           //printf("submitted req %d\n", i);
         }
         err = 0;
+        uint64_t sum = 0;
         for (int i=0; i<nloop; i++) {
           err += veo_call_wait_result(ctx, reqs[i], &res[i]);
+          sum += res[i];
           //printf("received result req %d\n", i);
         }
         
@@ -61,7 +63,7 @@ int main(int argc, char *argv[])
         printf("%d async calls took %fs, %f us/call\n",
                nloop, (double)(te-ts)/1.e6, (double)(te-ts)/nloop);
         printf("cumulated err=%d\n", err);
-
+        printf("sum=%lu, expected=%ld\n", sum, nloop*(nloop+1)/2);
 
         err = veo_context_close(ctx);
         printf("context_close returned %d\n", err);

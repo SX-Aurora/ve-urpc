@@ -6,6 +6,8 @@
 #ifndef __ve__
 #include <CallArgs.hpp>
 using veo::CallArgs;
+#else
+#include "ve_inst.h"
 #endif
 
 // reply timeout in us
@@ -50,17 +52,6 @@ enum veo_urpc_call_flags
 	VEO_CALL_STK_OUT = 2
 };
 
-static inline int64_t send_cmd_nopayload(urpc_peer_t *up, enum veo_urpc_cmd cmd)
-{
-	urpc_mb_t m;
-	m.c.cmd = cmd;
-	m.c.offs=0; m.c.len=0;
-	int64_t req = urpc_put_cmd(up, &m);
-	if (req < 0)
-		eprintf("sending cmd %d failed\n", cmd);
-	return req;
-}
-
 static inline int pickup_acks(urpc_peer_t *up, int acks)
 {
 	transfer_queue_t *tq = up->recv.tq;
@@ -82,7 +73,6 @@ static inline int pickup_acks(urpc_peer_t *up, int acks)
  
 void send_ping_nolock(urpc_peer_t *up);
 int64_t send_ack_nolock(urpc_peer_t *up);
-int64_t send_result_nolock(urpc_peer_t *up, int64_t result);
 int64_t send_exception_nolock(urpc_peer_t *up, int64_t exc);
 
 int64_t send_read_mem_nolock(urpc_peer_t *up, uint64_t src, size_t size);

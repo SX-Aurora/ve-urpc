@@ -86,7 +86,7 @@ int main(int argc, char **argv)
 	for (i = 0; i < n; i++)
                  res = veo_write_mem(proc, ve_buff, local_buff, bsize);
 	te = get_time_us();
-	printf("veo_write_mem n=%d time=%.2fs   latency=%f8.1us\n", n, ((double)(te - ts))/1e6, ((double)(te - ts))/1000.0/n);
+	printf("veo_write_mem n=%d time=%.2fs   latency=%f8.1us\n", n, ((double)(te - ts))/1e6, ((double)(te - ts))/n);
 
 	//overwrite local buffer
 	memset(local_buff, 65, bsize);
@@ -96,7 +96,7 @@ int main(int argc, char **argv)
 	for (i = 0; i < n; i++)
 		res = veo_read_mem(proc, local_buff, ve_buff, bsize);
 	te = get_time_us();
-	printf("veo_read_mem n=%d time=%.2fs   latency=%f8.1us\n", n, ((double)(te - ts))/1e6, ((double)(te - ts))/1000.0/n);
+	printf("veo_read_mem n=%d time=%.2fs   latency=%f8.1us\n", n, ((double)(te - ts))/1e6, ((double)(te - ts))/n);
 	
 finish:
 	veo_finish();

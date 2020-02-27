@@ -5,7 +5,7 @@ include ../make.inc
 
 
 VHLIB_OBJ := init_hook.o vh_shm.o vh_urpc.o urpc_common.o
-VELIB_OBJ := init_hook.o ve_urpc.o urpc_common.o
+VELIB_OBJ := init_hook.o ve_urpc.o urpc_common.o dma_handler.o
 
 LIBS := $(BLIB)/liburpcVH.so $(BLIB)/liburpcVE.so $(BLIB)/liburpcVE_omp.so
 INCLUDES := urpc_common.h urpc_debug.h urpc_time.h

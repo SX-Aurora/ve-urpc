@@ -9,6 +9,10 @@
 #include <pthread.h>
 
 #include "urpc_debug.h"
+#ifdef __ve__
+#include <vedma.h>
+#include "dma_handler.h"
+#endif
 
 /* maximum number of peer currently limited to 64 = 8 VEs * 10 cores */
 #define URPC_MAX_PEERS 64
@@ -141,6 +145,19 @@ union mlist {
 };
 typedef union mlist mlist_t;
 
+#ifdef __ve__
+struct dma_handler {
+	int in;		//!< slot of last cmd inserted
+	int submit;	//!< slot of last cmd submitted to DMA
+	int done;	//!< slot of last cmd who's DMA is finished
+	int out;	//!< slot of last cmd that was processed by handler
+	int64_t in_req;			//!< URPC req number of 'in' cmd
+	urpc_mb_t cmd[URPC_LEN_MB];
+	ve_dma_handle_t handle[URPC_LEN_MB];
+};
+typedef struct dma_handler dma_handler_t;
+#endif
+	
 struct urpc_comm {
 	// payload buffer memory management
 	// memory block associated to each mailbox slot in transfer queue
@@ -150,7 +167,7 @@ struct urpc_comm {
 	uint32_t free_end;	// offset of end of free block
 	transfer_queue_t *tq;	// communication buffer in shared memory segment
 #ifdef __ve__
-	//dma_handler_t dhq;		// handles async DMA transfers
+	dma_handler_t dhq;		// handles async DMA transfers
 	uint64_t shm_data_vehva;	// start of payload buffer space in shm segment vehva
 	uint64_t mirr_data_vehva;	// VEHVA address of VE mirror buffer to payload buffer
 	void *mirr_data_buff;		// virtual address of VE mirror buffer
@@ -195,6 +212,8 @@ typedef void (*handler_init_hook_t)(urpc_peer_t *);
 urpc_peer_t *ve_urpc_init(int segid, int core);
 void ve_urpc_fini(urpc_peer_t *up);
 int ve_transfer_data_sync(uint64_t dst_vehva, uint64_t src_vehva, int len);
+int ve_urpc_recv_progress(urpc_peer_t *up, int ncmds);
+int ve_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us);
 
 #else
 
@@ -203,6 +222,8 @@ int vh_urpc_peer_destroy(urpc_peer_t *up);
 int vh_urpc_child_create(urpc_peer_t *up, char *binary,
                          int venode_id, int ve_core);
 int vh_urpc_child_destroy(urpc_peer_t *up);
+int vh_urpc_recv_progress(urpc_peer_t *up, int ncmds);
+int vh_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us);
 
 #endif
 
@@ -221,8 +242,6 @@ void urpc_slot_done(transfer_queue_t *tq, int slot, urpc_mb_t *m);
 int urpc_unpack_payload(void *payload, size_t psz, char *fmt, ...);
 int urpc_recv_req_timeout(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
                           long timeout_us, void **payload, size_t *plen);
-int urpc_recv_progress(urpc_peer_t *up, int ncmds);
-int urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us);
 int urpc_register_handler(urpc_peer_t *up, int cmd, urpc_handler_func handler);
 void urpc_set_handler_init_hook(void (*func)(urpc_peer_t *up));
 handler_init_hook_t urpc_get_handler_init_hook(void);

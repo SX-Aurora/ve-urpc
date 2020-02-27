@@ -21,13 +21,13 @@ int _vh_shm_init(int key, size_t size, void **local_addr)
 	
 	int segid = shmget(key, size, IPC_CREAT | SHM_HUGETLB | S_IRWXU); 
 	if (segid == -1) {
-		printf("[vh_shm_init] shmget failed: %s\n", strerror(errno));
+		eprintf("[vh_shm_init] shmget failed: %s\n", strerror(errno));
 		return -errno;
 	}
 	*local_addr = shmat(segid, NULL, 0);
-	dprintf("local_addr: %p\n", *local_addr);
+	dprintf("[vh_shm_init] shm seg local_addr: %p\n", *local_addr);
 	if (*local_addr == (void *) -1) {
-		printf("[vh_shm_init] shmat failed: %s\n"
+		eprintf("[vh_shm_init] shmat failed: %s. "
 			"Releasing shm segment. key=%d\n", strerror(errno), key);
 		shmctl(segid, IPC_RMID, NULL);
 		segid = -errno;

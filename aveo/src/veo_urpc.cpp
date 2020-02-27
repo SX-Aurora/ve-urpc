@@ -12,47 +12,9 @@ namespace veo {
   // Commands
   //
 
-  void send_ping_nolock(urpc_peer_t *up)
-  {
-    urpc_mb_t m;
-    m.c.cmd = URPC_CMD_PING;
-    m.c.offs=0; m.c.len=0;
-    int64_t req = urpc_put_cmd(up, &m);
-    if (req < 0)
-      eprintf("send_ping failed\n");
-  }
-
-  int64_t send_ack_nolock(urpc_peer_t *up)
-  {
-    return send_cmd_nopayload(up, URPC_CMD_ACK);
-  }
-
-  int64_t send_result_nolock(urpc_peer_t *up, int64_t result)
-  {
-    return urpc_generic_send(up, URPC_CMD_RESULT, (char *)"L", result);
-  }
-
-  int64_t send_exception_nolock(urpc_peer_t *up, int64_t exc)
-  {
-    return urpc_generic_send(up, URPC_CMD_EXCEPTION, (char *)"L", exc);
-  }
-
   int64_t send_unloadlib_nolock(urpc_peer_t *up, const uint64_t libhndl)
   {
     return urpc_generic_send(up, URPC_CMD_UNLOADLIB, (char *)"L", libhndl);
-  }
-
-  /**
-   * @brief Read VE memory
-   *
-   * @param up URPC peer
-   * @param src VE source address of full transfer
-   * @param size the full transfer size
-   * @return request ID if successful, -1 if failed.
-   */
-  int64_t send_read_mem_nolock(urpc_peer_t *up, uint64_t src, size_t size)
-  {
-    return urpc_generic_send(up, URPC_CMD_RECVBUFF, (char *)"LL", src, size);
   }
 
   /**
@@ -234,7 +196,7 @@ extern "C" {
   static int ping_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
                           void *payload, size_t plen)
   {
-    send_ack_nolock(up);
+    urpc_generic_send(up, URPC_CMD_ACK, (char *)"");
     return 0;
   }
 
@@ -242,7 +204,7 @@ extern "C" {
                           void *payload, size_t plen)
   {
     veo_finish_ = 1;
-    send_ack_nolock(up);
+    urpc_generic_send(up, URPC_CMD_ACK, (char *)"");
     return 0;
   }
 
@@ -257,7 +219,7 @@ extern "C" {
     uint64_t handle = (uint64_t)dlopen(libname, RTLD_NOW);
     dprintf("loadlib_handler libname=%s handle=%p\n", libname, handle);
 
-    int64_t new_req = send_result_nolock(up, handle);
+    int64_t new_req = urpc_generic_send(up, URPC_CMD_RESULT, (char *)"L", handle);
     // check req IDs. Result expected with exactly same req ID.
     if (new_req != req) {
       eprintf("loadlib_handler: send result req ID mismatch: %ld instead of %ld\n",
@@ -277,7 +239,7 @@ extern "C" {
 
     int rc = dlclose((void *)libhndl);
 
-    int64_t new_req = send_result_nolock(up, (int64_t)rc);
+    int64_t new_req = urpc_generic_send(up, URPC_CMD_RESULT, (char *)"L", (int64_t)rc);
     if (new_req != req || new_req < 0) {
       eprintf("unloadlib_handler: send result failed\n");
       return -1;
@@ -311,7 +273,7 @@ extern "C" {
     }
 #endif
 	
-    int64_t new_req = send_result_nolock(up, symaddr);
+    int64_t new_req = urpc_generic_send(up, URPC_CMD_RESULT, (char *)"L", symaddr);
     // check req IDs. Result expected with exactly same req ID.
     if (new_req != req) {
       printf("getsym_handler: send result req ID mismatch: %ld instead of %ld\n",
@@ -332,7 +294,7 @@ extern "C" {
     void *addr = malloc(allocsz);
     dprintf("alloc_handler addr=%p size=%lu\n", addr, allocsz);
 
-    int64_t new_req = send_result_nolock(up, (uint64_t)addr);
+    int64_t new_req = urpc_generic_send(up, URPC_CMD_RESULT, (char *)"L", (uint64_t)addr);
     // check req IDs. Result expected with exactly same req ID.
     if (new_req != req) {
       eprintf("alloc_handler: send result req ID mismatch: %ld instead of %ld\n",
@@ -353,7 +315,7 @@ extern "C" {
     free((void *)addr);
     dprintf("free_handler addr=%p\n", (void *)addr);
 
-    int64_t new_req = send_ack_nolock(up);
+    int64_t new_req = urpc_generic_send(up, URPC_CMD_ACK, (char *)"");
     // check req IDs. Result expected with exactly same req ID.
     if (new_req != req) {
       eprintf("free_handler: send result req ID mismatch: %ld instead of %ld\n",
@@ -430,7 +392,7 @@ extern "C" {
     char *d = (char *)dst;
     memcpy(d, buff, bsz);
     urpc_slot_done(up->recv.tq, REQ2SLOT(req), m);
-    send_ack_nolock(up);
+    urpc_generic_send(up, URPC_CMD_ACK, (char *)"");
     size -= bsz;
     d += bsz;
 
@@ -444,7 +406,7 @@ extern "C" {
         return -1;
       }
       // send an ACK to keep req IDs in sync
-      send_ack_nolock(up);
+      urpc_generic_send(up, URPC_CMD_ACK, (char *)"");
       if (m.c.cmd != URPC_CMD_SENDFRAG) {
         eprintf("expected SENDFRAG message, got: %d\n", m.c.cmd);
         return -1;
@@ -464,6 +426,22 @@ extern "C" {
 
 #ifdef __ve__
 
+  static void print_dhq_state(urpc_peer_t *up)
+  {
+    dma_handler_t *dh = &up->recv.dhq;
+    printf("dhq recv: in_req=%ld in=%d submit=%d done=%d out=%d\n",
+           dh->in_req, dh->in, dh->submit, dh->done, dh->out);
+    int64_t last_put = TQ_READ64(up->recv.tq->last_put_req);
+    int64_t last_get = TQ_READ64(up->recv.tq->last_get_req);
+    printf("recv last_put=%ld last_get=%ld\n", last_put, last_get);
+    dh = &up->send.dhq;
+    printf("dhq send: in_req=%ld in=%d submit=%d done=%d out=%d\n",
+           dh->in_req, dh->in, dh->submit, dh->done, dh->out);
+    last_put = TQ_READ64(up->send.tq->last_put_req);
+    last_get = TQ_READ64(up->send.tq->last_get_req);
+    printf("send last_put=%ld last_get=%ld\n", last_put, last_get);
+  }
+  
   static int call_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
                           void *payload, size_t plen)
   {
@@ -486,9 +464,10 @@ extern "C" {
       // if addr == 0: send current stack pointer
       //
       if (addr == 0) {
-        int64_t new_req = send_result_nolock(up, curr_sp);
+        int64_t new_req = urpc_generic_send(up, URPC_CMD_RESULT, (char *)"L", curr_sp);
         if (new_req != req || new_req < 0) {
-          eprintf("call_handler sp send failed, req mismatch.\n");
+          eprintf("call_handler sp send failed, req mismatch. Expected %ld got %ld\n",
+                  req, new_req);
           return -1;
         }
         return 0;
@@ -586,13 +565,17 @@ extern "C" {
       int64_t new_req = urpc_generic_send(up, URPC_CMD_RESCACHE, (char *)"LP",
                                           result, stack, stack_size);
       if (new_req != req || new_req < 0) {
-        eprintf("call_handler sp send failed, req mismatch.\n");
+        eprintf("call_handler send RESCACHE failed, req mismatch. Expected %ld got %ld\n",
+                req, new_req);
+        print_dhq_state(up);
         return -1;
       }
     } else {
-      int64_t new_req = send_result_nolock(up, result);
+      int64_t new_req = urpc_generic_send(up, URPC_CMD_RESULT, (char *)"L", result);
       if (new_req != req || new_req < 0) {
-        eprintf("call_handler: send result failed\n");
+        eprintf("call_handler: send RESULT failed. Expected %ld got %ld\n",
+                req, new_req);
+        print_dhq_state(up);
         return -1;
       }
     }

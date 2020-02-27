@@ -2,6 +2,7 @@
 #define _VEO_LOG_HPP_
 #include <log4c.h>
 #include <stdarg.h>
+#include "urpc_debug.h"
 namespace veo {
 class ThreadContext;
 
@@ -16,19 +17,28 @@ void veo__vlog(const ThreadContext *, const log4c_location_info_t *,
 void veo__log(const ThreadContext *, const log4c_location_info_t *,
               int, const char *, ...);
 } // namespace veo
+#if 0
 #define VEO_LOG(ctx, prio, fmt, ...) do { \
   const log4c_location_info_t location__ = \
     LOG4C_LOCATION_INFO_INITIALIZER(NULL); \
   veo__log(ctx, &location__, prio, fmt, ## __VA_ARGS__); \
 } while (0)
+#else
+#define VEO_LOG(ctx, prio, fmt, ...) do { \
+  const log4c_location_info_t location__ = \
+    LOG4C_LOCATION_INFO_INITIALIZER(NULL); \
+  dprintf(fmt, ## __VA_ARGS__); \
+} while (0)
+
+#endif
 
 #define VEO_ERROR(ctx, fmt, ...) do {                 \
   VEO_LOG(ctx, veo::VEO_LOG_ERROR, fmt, ## __VA_ARGS__); \
   printf("VEO_ERROR " fmt, __VA_ARGS__);              \
   } while(0)
-#define VEO_DEBUG(ctx, fmt, ...) VEO_LOG(ctx, veo::VEO_LOG_DEBUG, fmt, \
+#define VEO_DEBUG(ctx, fmt, ...) VEO_LOG(ctx, veo::VEO_LOG_DEBUG, "[DEBUG]" fmt "\n", \
                                          ## __VA_ARGS__)
-#define VEO_TRACE(ctx, fmt, ...) VEO_LOG(ctx, veo::VEO_LOG_TRACE, fmt, \
+#define VEO_TRACE(ctx, fmt, ...) VEO_LOG(ctx, veo::VEO_LOG_TRACE, "[TRACE]" fmt "\n", \
                                          ## __VA_ARGS__)
 
 #define VEO_ASSERT(_cond) do { \

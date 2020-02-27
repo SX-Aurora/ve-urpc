@@ -53,10 +53,10 @@ int main(int argc, char *argv[])
         for (int i = 0; i < nloop; i++) {
 		//send_ping_nolock(up);
 		send_string_nolock(up, buff);
-		urpc_recv_progress(up, 5);
+		vh_urpc_recv_progress(up, 5);
         }
 
-	urpc_recv_progress_timeout(up, 1, 100);
+	vh_urpc_recv_progress_timeout(up, 1, 100);
 
 	te = get_time_us();
 

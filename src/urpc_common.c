@@ -343,66 +343,6 @@ int urpc_recv_req_timeout(urpc_peer_t *up, urpc_mb_t *m, int64_t req, long timeo
 }
 
 /*
-  URPC progress function.
-
-  Process at most 'ncmds' requests from the RECV communicator.
-  Return number of requests processed.
-*/
-int urpc_recv_progress(urpc_peer_t *up, int ncmds)
-{
-	urpc_comm_t *uc = &up->recv;
-	transfer_queue_t *tq = uc->tq;
-	urpc_handler_func func = NULL;
-	int err = 0, done = 0;
-	urpc_mb_t m;
-	void *payload = NULL;
-	size_t plen = 0;
-
-	// TODO: aggregate contiguous payload buffers
-	while (done < ncmds) {
-		int64_t req = urpc_get_cmd(tq, &m);
-		if (req < 0)
-			break;
-		//
-		// set/receive payload, if needed
-		//
-		set_recv_payload(uc, &m, &payload, &plen);
-		//
-		// call handler
-		//
-		func = up->handler[m.c.cmd];
-		if (func) {
-			err = func(up, &m, req, payload, plen);
-			if (err)
-				eprintf("Warning: RPC handler %d returned %d\n",
-					m.c.cmd, err);
-		}
-
-		urpc_slot_done(tq, REQ2SLOT(req), &m);
-		++done;
-	}
-	return done;
-}
-
-/*
-  Progress loop with timeout.
-*/
-int urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us)
-{
-	long done_ts = 0;
-	do {
-		int done = urpc_recv_progress(up, ncmds);
-		if (done == 0) {
-			if (done_ts == 0)
-				done_ts = get_time_us();
-		} else
-			done_ts = 0;
-
-	} while (done_ts == 0 || timediff_us(done_ts) < timeout_us);
-
-}
-
-/*
   Register a RPC handler.
 
   Returns cmd ID if successful, a negative number if not.
@@ -458,8 +398,11 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
 	char *p, *pp, *payload;
 	urpc_comm_t *uc = &up->send;
 	transfer_queue_t *tq = uc->tq;
-	urpc_mb_t mb = { .u64 = 0 };;
+	urpc_mb_t mb = { .u64 = 0 };
+        int64_t req;
 
+        // protect from others messing with the mailboxes
+        //pthread_mutex_lock(&uc->lock);
 	va_list ap1, ap2;
 	va_start(ap1, fmt);
 	va_copy(ap2, ap1);
@@ -503,6 +446,7 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
 		if (mb.u64 == 0) {
 			dprintf("generic_send: failed to allocate payload\n");
 			eprintf("ERROR: urpc_alloc_payload failed!");
+                        //pthread_mutex_unlock(&uc->lock);
 			return -ENOMEM;
 		}
 
@@ -540,24 +484,38 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
 				break;
 			}
 		}
-		// on VE: do the DMA/data transfer
-#ifdef __ve__
-		rc = ve_transfer_data_sync(uc->shm_data_vehva + mb.c.offs,
-					   uc->mirr_data_vehva + mb.c.offs,
-					   mb.c.len);
-		if (rc) {
-			eprintf("[VE ERROR] ve_dma_post_wait send failed: %x\n", rc);
-			return -EIO;
-		}
-#endif
 
 	}
 	va_end(ap2);
 
 	mb.c.cmd = cmd;
 
+        // on VE: do the DMA/data transfer
+#if 0
+	if (size) {
+		rc = ve_transfer_data_sync(uc->shm_data_vehva + mb.c.offs,
+					   uc->mirr_data_vehva + mb.c.offs,
+					   mb.c.len);
+		if (rc) {
+			eprintf("[VE ERROR] ve_dma_post_wait send failed: %x\n", rc);
+                        //pthread_mutex_unlock(&uc->lock);
+			return -EIO;
+		}
+	}
+	
 	// send command
-	return urpc_put_cmd(up, &mb);
+        req = urpc_put_cmd(up, &mb);
+#else
+#ifdef __ve__
+	req = dhq_cmd_in(uc, &mb, 0);
+#else
+	// send command
+        req = urpc_put_cmd(up, &mb);
+#endif
+#endif
+
+        //pthread_mutex_unlock(&uc->lock);
+	return req;
 }
 
 /*

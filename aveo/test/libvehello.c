@@ -17,7 +17,9 @@ uint64_t print_buffer()
   return 1;
 }
 
+uint64_t empty_cnt = 0;
 uint64_t empty(void)
 {
-  return 0;
+  empty_cnt++;
+  return empty_cnt;
 }

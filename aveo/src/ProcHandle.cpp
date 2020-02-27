@@ -72,7 +72,7 @@ int ProcHandle::exitProc()
   VEO_TRACE(nullptr, "%s()", __func__);
   // TODO: send exit urpc command
   //
-  auto req = send_cmd_nopayload(this->up, URPC_CMD_EXIT);
+  auto req = urpc_generic_send(up, URPC_CMD_EXIT, (char *)"");
   if (req < 0) {
     throw VEOException("exitProc: failed to send EXIT cmd.");
   }
@@ -212,7 +212,7 @@ int ProcHandle::readMem(void *dst, uint64_t src, size_t size)
   this->main_ctx->_synchronize_nolock();
   VEO_TRACE(nullptr, "readMem(%p, %#lx, %ld)", dst, src, size);
 
-  auto req = send_read_mem_nolock(this->up, src, size);
+  auto req = urpc_generic_send(this->up, URPC_CMD_RECVBUFF, (char *)"LL", src, size);
 
   char *d = (char *)dst;
   while (size > 0) {
@@ -238,7 +238,7 @@ int ProcHandle::readMem(void *dst, uint64_t src, size_t size)
       ++req;
       if (size > 0) {
         // send an ACK to keep req IDs in sync
-        send_ack_nolock(this->up);
+        urpc_generic_send(this->up, URPC_CMD_ACK, (char *)"");
       }
     } else {
       dprintf("result message for req=%ld had no payload!?", req);
@@ -288,11 +288,11 @@ int ProcHandle::writeMem(uint64_t dst, const void *src, size_t size)
     ++acks;
 			
     // check req IDs. Result expected with exactly same req ID.
-    if (new_req != req) {
-      eprintf("writeMem: send result req ID mismatch:"
-              " %ld instead of %ld\n", new_req, req);
-      return -1;
-    }
+    //if (new_req != req) {
+    //  eprintf("writeMem: send result req ID mismatch:"
+    //          " %ld instead of %ld\n", new_req, req);
+    //  return -1;
+    //}
     size -= psz;
     s += psz;
     if (acks > 100) {
@@ -317,7 +317,7 @@ int ProcHandle::writeMem(uint64_t dst, const void *src, size_t size)
  * @param result pointer to result
  * @return 0 if all went well.
  */
-int ProcHandle::callSync(uint64_t addr, CallArgs &args, uint64_t *result)
+int ProcHandle::callSync(uint64_t addr, CallArgs &arg, uint64_t *result)
 {
   urpc_mb_t m;
   void *payload;
@@ -328,7 +328,7 @@ int ProcHandle::callSync(uint64_t addr, CallArgs &args, uint64_t *result)
   VEO_TRACE(nullptr, "%s(%#lx, ...)", __func__, addr);
   VEO_DEBUG(nullptr, "VE function = %p", (void *)addr);
 
-  int64_t req = send_call_nolock(this->up, this->ve_sp, addr, args);
+  int64_t req = send_call_nolock(this->up, this->ve_sp, addr, arg);
 
   // TODO: make sync call timeout configurable
   if (!urpc_recv_req_timeout(up, &m, req, 150*REPLY_TIMEOUT, &payload, &plen)) {
@@ -337,7 +337,7 @@ int ProcHandle::callSync(uint64_t addr, CallArgs &args, uint64_t *result)
     return -1;
   }
 
-  int rc = unpack_call_result(&m, &args, payload, plen, result);
+  int rc = unpack_call_result(&m, &arg, payload, plen, result);
   
   urpc_slot_done(this->up->recv.tq, REQ2SLOT(req), &m);
 

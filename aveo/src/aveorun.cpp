@@ -47,7 +47,7 @@ void signalHandler( int signum ) {
       }
     }
   }
-  veo::send_exception_nolock(main_up, signum);
+  urpc_generic_send(main_up, veo::URPC_CMD_EXCEPTION, (char *)"L", (int64_t)signum);
   sleep(20);
   ve_urpc_fini(main_up);
   exit(signum);  
@@ -83,7 +83,7 @@ int main()
   dprintf("VE: set receiver flag to 1.\n");
 
   while (!veo_finish_) {
-    err = urpc_recv_progress(up, 3);
+    err = ve_urpc_recv_progress(up, 10);
   }
 
   ve_urpc_fini(up);
