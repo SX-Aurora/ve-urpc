@@ -17,7 +17,7 @@ void *child(void *arg)
   int err = 0;
   struct veo_args *argp = veo_args_alloc();
   long ts, te;
-  int mloop = 2*nloop;
+  int mloop = 10*nloop/9;
   uint64_t reqs[mloop], res[mloop];
 
   //----------------------
