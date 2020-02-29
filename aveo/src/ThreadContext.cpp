@@ -58,14 +58,7 @@ int ThreadContext::close()
   if (this->isMainThread())
     return 0;
 
-  // TODO: call progress until all requests done
-  auto id = this->issueRequestID();
-  auto f = std::bind(&ThreadContext::_closeCommandHandler, this, id);
-  std::unique_ptr<Command> req(new internal::CommandImpl(id, f));
-  if(this->comq.pushRequest(std::move(req)))
-    id = VEO_REQUEST_ID_INVALID;
-  auto c = this->comq.waitCompletion(id);
-  return c->getRetval();
+  // TODO: send exit URPC
 }
 
 /**

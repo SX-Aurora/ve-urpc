@@ -12,13 +12,11 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <unordered_map>
 #include <urpc_common.h>
 #include "ve_offload.h"
-namespace veo {
-class ThreadContext;
 
-typedef enum veo_command_state CommandStatus;
-typedef enum veo_queue_state QueueStatus;
+namespace veo {
 
 /**
  * @brief base class of command handled by pseudo thread
@@ -47,6 +45,23 @@ public:
   uint64_t getRetval() { return this->retval; }
   virtual bool isVH() = 0;
 };
+}
+
+//namespace std {
+//    template <>
+//    class hash<std::pair<uint64_t&, std::unique_ptr<veo::Command>&> {
+//    public:
+//      size_t operator()(const std::pair<uint64_t&, std::unique_ptr<veo::Command>&>& x) const{
+//            return hash<uint64_t>()(x.first);
+//        }
+//    };
+//}
+
+namespace veo {
+class ThreadContext;
+
+typedef enum veo_command_state CommandStatus;
+typedef enum veo_queue_state QueueStatus;
 
 /**
  * @brief blocking queue used in CommQueue
@@ -73,13 +88,45 @@ public:
 };
 
 /**
+ * @brief blocking map used in CommQueue
+ */
+class BlockingMap {
+private:
+  std::mutex mtx;
+  std::condition_variable cond; // Note: not needed any more, since we busy wait, maybe later
+  std::unordered_map<uint64_t, std::unique_ptr<Command>> map;
+  std::unique_ptr<Command> tryFindNoLock(uint64_t);
+
+public:
+  BlockingMap() {}
+  void insert(std::unique_ptr<Command> cmd) {
+    std::lock_guard<std::mutex> lock(this->mtx);
+    auto id = cmd->getID();
+    //this->map[id] = std::move(cmd);
+    this->map.insert(std::make_pair(id, std::move(cmd)));
+  };
+  std::unique_ptr<Command> tryFind(uint64_t id) {
+    std::lock_guard<std::mutex> lock(this->mtx);
+    auto got = this->map.find(id);
+    if (got == this->map.end())
+      return nullptr;
+    auto rv = std::move(got->second);
+    this->map.erase(id);
+    return rv;
+  };
+  //std::unique_ptr<Command> wait(uint64_t);
+  bool empty() { return this->map.empty(); }
+};
+
+/**
  * @brief high level request handling queue
  */
 class CommQueue {
 private:
   BlockingQueue request;/*! request queue: for async calls */
-  BlockingQueue inflight;/*! in-flight queue: for reqs that have been submitted through URPC */
-  BlockingQueue completion;/*! completion queue: finished reqs picked up from URPC */
+  BlockingQueue inflight;/*! reqs that have been submitted to URPC */
+  BlockingMap completion;/*! completion map: finished reqs picked up from URPC */
+
 public:
   CommQueue() {};
 
@@ -92,7 +139,7 @@ public:
   bool emptyInFlight() { return this->inflight.empty(); }
   std::unique_ptr<Command> popInFlight();
   void pushCompletion(std::unique_ptr<Command>);
-  std::unique_ptr<Command> waitCompletion(uint64_t msgid);
+  //std::unique_ptr<Command> waitCompletion(uint64_t msgid);
   std::unique_ptr<Command> peekCompletion(uint64_t msgid);
   void cancelAll();
   void setRequestStatus(QueueStatus s){ this->request.setStatus(s); }
