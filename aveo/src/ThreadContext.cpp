@@ -153,7 +153,7 @@ void ThreadContext::_progress_nolock(int ops)
  */
 void ThreadContext::progress(int ops)
 {
-  //std::lock_guard<std::mutex> lock(this->submit_mtx);
+  std::lock_guard<std::mutex> lock(this->prog_mtx);
   _progress_nolock(ops);
 }
 
@@ -177,7 +177,7 @@ void ThreadContext::synchronize()
 void ThreadContext::_synchronize_nolock()
 {
   while(!(this->comq.emptyRequest() && this->comq.emptyInFlight())) {
-    this->_progress_nolock(0);
+    this->progress(0);
   }
 }
 

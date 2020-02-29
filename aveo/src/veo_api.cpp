@@ -364,6 +364,18 @@ int veo_context_close(veo_thr_ctxt *ctx)
 }
 
 /**
+ * @brief get VEO context state
+ *
+ * @return the state of the VEO context state.
+ * @retval VEO_STATE_RUNNING VEO context is running.
+ * @retvav VEO_STATE_EXIT VEO context  exited.
+ */
+int veo_get_context_state(veo_thr_ctxt *ctx)
+{
+  return ThreadContextFromC(ctx)->getState();
+}
+
+/**
  * @brief allocate VEO arguments object (veo_args)
  *
  * @return pointer to veo_args
@@ -641,8 +653,6 @@ int veo_call_wait_result(veo_thr_ctxt *ctx, uint64_t reqid, uint64_t *retp)
   }
 }
 
-
-#if 0
 /**
  * @brief Asynchronously read VE memory
  *
@@ -682,7 +692,43 @@ uint64_t veo_async_write_mem(veo_thr_ctxt *ctx, uint64_t dst, const void *src,
     return VEO_REQUEST_ID_INVALID;
   }
 }
-#endif /* 0 */
 
+/**
+ * @brief request a VE thread to call a function
+ *
+ * @param ctx VEO context to execute the function on VE.
+ * @param libhdl a library handle
+ * @param symname symbol name to find
+ * @param args arguments to be passed to the function
+ * @return request ID
+ * @retval VEO_REQUEST_ID_INVALID request failed.
+ */
+uint64_t veo_call_async_by_name(veo_thr_ctxt *ctx, uint64_t libhdl,
+                        const char *symname, veo_args *args)
+{
+  try {
+    return ThreadContextFromC(ctx)->callAsyncByName(libhdl, symname, *CallArgsFromC(args));
+  } catch (VEOException &e) {
+    return VEO_REQUEST_ID_INVALID;
+  }
+}
+
+/**
+ * @brief call a VH function asynchronously
+ *
+ * @param ctx VEO context in which to execute the function.
+ * @param func address of VH function to call
+ * @param arg pointer to arguments structure for the function
+ * @return request ID
+ * @retval VEO_REQUEST_ID_INVALID if request failed.
+ */
+uint64_t veo_call_async_vh(veo_thr_ctxt *ctx, uint64_t (*func)(void *), void *arg)
+{
+  try {
+    return ThreadContextFromC(ctx)->callVHAsync(func, arg);
+  } catch (VEOException &e) {
+    return VEO_REQUEST_ID_INVALID;
+  }
+}
 
 //@}

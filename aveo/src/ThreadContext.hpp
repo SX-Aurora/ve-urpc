@@ -35,6 +35,7 @@ private:
   std::unordered_set<uint64_t> rem_reqid;
   std::mutex req_mtx;
   std::mutex submit_mtx;
+  std::mutex prog_mtx;
 
   void _progress_nolock(int ops);
   void progress(int ops);

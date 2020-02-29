@@ -195,6 +195,14 @@ int64_t urpc_put_cmd(urpc_peer_t *up, urpc_mb_t *m)
 		}
 	}
 #endif
+
+        mlist_t *ml = &uc->mlist[slot];
+	if (m->c.len) {
+		ml->b.len = m->c.len;
+		ml->b.offs = m->c.offs;
+	} else
+		ml->u64 = 0;
+        
 	TQ_WRITE64(tq->mb[slot].u64, m->u64);
 	TQ_WRITE64(tq->last_put_req, req);
         dprintf("urpc_put_cmd req=%ld cmd=%u offs=%u len=%u\n",
@@ -427,17 +435,17 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
 #ifdef __ve__
         // on VE: submit to async DMA handler
 	req = dhq_cmd_in(uc, &mb, 0);
-#else
-	// on VH: send command
-        req = urpc_put_cmd(up, &mb);
-#endif
 	mlist_t *ml = &uc->mlist[REQ2SLOT(req)];
 	if (mb.c.len) {
 		ml->b.len = mb.c.len;
 		ml->b.offs = mb.c.offs;
 	} else
 		ml->u64 = 0;
-
+#else
+	// on VH: send command
+        req = urpc_put_cmd(up, &mb);
+#endif
+        
         //pthread_mutex_unlock(&uc->lock);
 	return req;
 }

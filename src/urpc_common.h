@@ -14,8 +14,8 @@
 #include "dma_handler.h"
 #endif
 
-/* maximum number of peer currently limited to 64 = 8 VEs * 10 cores */
-#define URPC_MAX_PEERS 64
+/* maximum number of peer currently limited to 80 = 8 VEs * 10 cores */
+#define URPC_MAX_PEERS 80
 /* the length of the mailbox MUST be a power of 2! */
 #define URPC_LEN_MB    256
 #define URPC_BUFF_LEN (64 * 1024 * 1024)
