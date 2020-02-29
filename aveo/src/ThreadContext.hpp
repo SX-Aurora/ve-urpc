@@ -32,10 +32,10 @@ private:
   uint64_t seq_no;
   uint64_t ve_sp;
   urpc_peer_t *up;		//!< ve-urpc peer pointer, each ctx has one
-  std::unordered_set<uint64_t> rem_reqid;
-  std::mutex req_mtx;
-  std::mutex submit_mtx;
-  std::mutex prog_mtx;
+  std::unordered_set<uint64_t> rem_reqid; // TODO: move this away from here!
+  std::mutex req_mtx;   //!< protects rem_reqid
+  std::mutex submit_mtx;//!< for synchronous calls prohibit submission of new reqs
+  std::mutex prog_mtx;	// ensure that progress is not called concurrently
 
   void _progress_nolock(int ops);
   void progress(int ops);
