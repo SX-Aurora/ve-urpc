@@ -19,6 +19,8 @@
 #include <sys/shm.h>
 
 namespace veo {
+
+  bool _init_hooks_registered = false;
   
 /**
  * @brief constructor
@@ -28,6 +30,12 @@ namespace veo {
  */
 ProcHandle::ProcHandle(int venode, char *binname) : ve_number(-1)
 {
+  // register init hooks once
+  //if (!_init_hooks_registered) {
+  //  urpc_set_handler_init_hook(&veo_urpc_register_handlers);
+  //  urpc_set_handler_init_hook(&veo_urpc_register_vh_handlers);
+  //  _init_hooks_registered = true;
+  //}
   // create vh side peer
   this->up = vh_urpc_peer_create();
   if (this->up == nullptr) {
@@ -208,43 +216,15 @@ void ProcHandle::freeBuff(const uint64_t buff)
  */
 int ProcHandle::readMem(void *dst, uint64_t src, size_t size)
 {
-  std::lock_guard<std::mutex> lock(this->main_ctx->submit_mtx);
-  this->main_ctx->_synchronize_nolock();
-  VEO_TRACE(nullptr, "readMem(%p, %#lx, %ld)", dst, src, size);
-
-  auto req = urpc_generic_send(this->up, URPC_CMD_RECVBUFF, (char *)"LL", src, size);
-
-  char *d = (char *)dst;
-  while (size > 0) {
-    urpc_mb_t m;
-    void *payload;
-    size_t plen, bsz;
-    void *buff;
-    if (!urpc_recv_req_timeout(up, &m, req, REPLY_TIMEOUT, &payload, &plen)) {
-      // timeout! complain.
-      eprintf("readMem timeout waiting for SENDFRAG req=%ld\n", req);
-      return -1;
-    }
-    if (m.c.cmd != URPC_CMD_SENDFRAG) {
-      eprintf("expected SENDFRAG message, got: %d\n", m.c.cmd);
-      return -1;
-    }
-    if (plen) {
-      urpc_unpack_payload(payload, plen, (char *)"P", &buff, &bsz);
-      memcpy(d, buff, bsz);
-      urpc_slot_done(this->up->recv.tq, REQ2SLOT(req), &m);
-      size -= bsz;
-      d += bsz;
-      ++req;
-      if (size > 0) {
-        // send an ACK to keep req IDs in sync
-        urpc_generic_send(this->up, URPC_CMD_ACK, (char *)"");
-      }
-    } else {
-      dprintf("result message for req=%ld had no payload!?", req);
-    }
+  VEO_TRACE(nullptr, "readMem(%p, %lx, %ld)", dst, src, size);
+  auto req = this->main_ctx->asyncReadMem(dst, src, size);
+  if (req == VEO_REQUEST_ID_INVALID) {
+    eprintf("readMem failed! Aborting.");
+    return -1;
   }
-  return 0;
+  uint64_t dummy;
+  auto rv = this->main_ctx->callWaitResult(req, &dummy);
+  return rv;
 }
 
 /**
@@ -256,57 +236,16 @@ int ProcHandle::readMem(void *dst, uint64_t src, size_t size)
  */
 int ProcHandle::writeMem(uint64_t dst, const void *src, size_t size)
 {
-  std::lock_guard<std::mutex> lock(this->main_ctx->submit_mtx);
-  this->main_ctx->_synchronize_nolock();
-  VEO_TRACE(nullptr, "writeMem(%#lx, %p, %ld)", dst, src, size);
-
-  size_t psz;
-  size_t maxfrag = PART_SENDFRAG;
-  if (size < PART_SENDFRAG * 4)
-    if (size > 120 * 1024)
-      maxfrag = ALIGN8B(size / 2);
-    else if (size > 240 * 1024)
-      maxfrag = ALIGN8B(size / 3);
-    else if (size > 512 * 1024)
-      maxfrag = ALIGN8B(size / 4);
-  char *s = (char *)src;
-  int acks = 0;
-
-  psz = size <= maxfrag ? size : maxfrag;
-  int64_t req = urpc_generic_send(this->up, URPC_CMD_SENDBUFF, (char *)"LLP",
-                                  dst, size, (void *)s, psz);
-  size -= psz;
-  s += psz;
-  ++acks;
-
-  while (size > 0) {
-    req += 1;
-    psz = size <= maxfrag ? size : maxfrag;
-    dprintf("writeMem psz=%ld (next req should be %ld\n", psz, req);
-    auto new_req = urpc_generic_send(this->up, URPC_CMD_SENDFRAG, (char *)"P",
-                                     (void *)s, psz);
-    ++acks;
-			
-    // check req IDs. Result expected with exactly same req ID.
-    //if (new_req != req) {
-    //  eprintf("writeMem: send result req ID mismatch:"
-    //          " %ld instead of %ld\n", new_req, req);
-    //  return -1;
-    //}
-    size -= psz;
-    s += psz;
-    if (acks > 100) {
-      if (pickup_acks(this->up, acks) == 0)
-        acks = 0;
-      else
-        return -1;
-    }
+  VEO_TRACE(nullptr, "writeMem(%p, %lx, %ld)", dst, src, size);
+  auto req = this->main_ctx->asyncWriteMem(dst, src, size);
+  if (req == VEO_REQUEST_ID_INVALID) {
+    eprintf("writeMem failed! Aborting.");
+    return -1;
   }
-  // pick up ACKs lazily
-  if (acks)
-    if (pickup_acks(this->up, acks) != 0)
-      return -1;
-  return 0;
+  uint64_t dummy;
+  auto rv = this->main_ctx->callWaitResult(req, &dummy);
+  VEO_TRACE(nullptr, "writeMem leave... rv=%d", rv);
+  return rv;
 }
 
 /**

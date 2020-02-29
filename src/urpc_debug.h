@@ -2,17 +2,18 @@
 #define URPC_DEBUG_INCLUDE
 
 //#define DEBUG 1
+//#define DEBUGMEM
 
 #ifdef DEBUG
 
 #ifdef __ve__
-#define dprintf(args...) do { \
-    fprintf(stdout, "[VE] " args);               \
+#define dprintf(fmt, ...) do {                \
+    fprintf(stdout, "[VE] " fmt, ## __VA_ARGS__);    \
     fflush(stdout);                              \
   } while(0)
 #else
-#define dprintf(args...) do { \
-    fprintf(stdout, "[VH] " args);              \
+#define dprintf(fmt, ...) do {                                       \
+    fprintf(stdout, "[VH] " fmt, ## __VA_ARGS__);         \
     fflush(stdout);                             \
   } while(0)
 #endif
@@ -24,13 +25,13 @@
 #endif
 
 #ifdef __ve__
-#define eprintf(args...) do { \
-    fprintf(stdout, "[VE] ERROR: " args);       \
+#define eprintf(fmt, ...) do {               \
+    fprintf(stdout, "[VE] ERROR: " fmt, ## __VA_ARGS__);        \
     fflush(stdout);                             \
   } while(0)
 #else
-#define eprintf(args...) do { \
-    fprintf(stdout, "[VH] ERROR: " args);       \
+#define eprintf(fmt, ...) do {                                        \
+    fprintf(stdout, "[VH] ERROR: " fmt, ## __VA_ARGS__);              \
     fflush(stdout);                             \
   } while(0)
 #endif

@@ -7,6 +7,7 @@
 
 #include <urpc_common.h>
 #include <urpc_debug.h>
+#include <urpc_time.h>
 #include <veo_urpc.hpp>
 
 //#define _GNU_SOURCE
@@ -58,21 +59,26 @@ urpc_peer_t *main_up;
 
 extern "C" {
   extern int veo_finish_;
-  extern void veo_urpc_register_ve_handlers(urpc_peer_t *);
+  //extern void veo_urpc_register_ve_handlers(urpc_peer_t *);
 }
 
 int main()
 {
   int err;
+  long ts = get_time_us();
 
   signal(SIGABRT, signalHandler);
   signal(SIGFPE, signalHandler);
   signal(SIGILL, signalHandler);
   signal(SIGSEGV, signalHandler);
   
-  urpc_set_handler_init_hook(&veo_urpc_register_ve_handlers);
+  //urpc_set_handler_init_hook(&veo_urpc_register_ve_handlers);
 
-        
+  const char* env_p = getenv("VEO_MAXINFLIGHT");
+  size_t maxinfl = 8;
+  if (const char* env_p = getenv("VEO_MAXINFLIGHT"))
+    maxinfl = atoi(env_p);
+
   urpc_peer_t *up = ve_urpc_init(0, -1);
   if (up == NULL)
     return -1;
@@ -83,7 +89,16 @@ int main()
   dprintf("VE: set receiver flag to 1.\n");
 
   while (!veo_finish_) {
-    err = ve_urpc_recv_progress(up, 10);
+    // carefull with number of progress calls
+    // number * max_send_buff_size should not be larger than what we have
+    // as send buffer memory
+    err = ve_urpc_recv_progress(up, 10, maxinfl);
+#ifdef DEBUGMEM
+    if (timediff_us(ts) > 100000) {
+      dhq_state(up);
+      ts = get_time_us();
+    }
+#endif
   }
 
   ve_urpc_fini(up);

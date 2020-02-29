@@ -72,8 +72,11 @@ static void _pin_threads_to_cores(int core)
 
 static void ve_urpc_comm_init(urpc_comm_t *uc)
 {
-	uc->free_begin = 0;
-	uc->free_end = URPC_DATA_BUFF_LEN;
+	uc->mem[0].begin = 0;
+	uc->mem[0].end = DATA_BUFF_END;
+	uc->mem[1].begin = 0;
+	uc->mem[1].end = 0;
+	uc->active = &uc->mem[0];
         pthread_mutex_init(&uc->lock, NULL);
 }
 
@@ -150,7 +153,7 @@ urpc_peer_t *ve_urpc_init(int segid, int core)
                 errno = ENOMEM;
 		return NULL;
 	}
-	dprintf("ve allocated buff at %p\n", buff_base);
+	dprintf("ve allocated buff at %p, size=%lu\n", buff_base, buff_size);
         // TODO: is this needed?
 	//busy_sleep_us(1*1000*1000);
 	buff_base_vehva = ve_register_mem_to_dmaatb(buff_base, buff_size);
@@ -172,11 +175,7 @@ urpc_peer_t *ve_urpc_init(int segid, int core)
         // initialize handler table
 	for (int i = 0; i <= URPC_MAX_HANDLERS; i++)
 		up->handler[i] = NULL;
-	handler_init_hook_t hook = urpc_get_handler_init_hook();
-	if (hook) {
-		dprintf("running handler init hook\n");
-		hook(up);
-        }
+        urpc_run_handler_init_hooks(up);
 
 	return up;
 }
@@ -205,52 +204,47 @@ void ve_urpc_fini(urpc_peer_t *up)
 }
 
 /*
-  Transfer buffer to from SHM area.
-
-  The transfer length is smaller that the maximum transfer doable in one
-  DMA descriptor (<128MiB).
-*/
-int ve_transfer_data_sync(uint64_t dst_vehva, uint64_t src_vehva, int len)
-{
-	int err;
-
-	err = ve_dma_post_wait(dst_vehva, src_vehva, len);
-	return err;
-}
-
-/*
   URPC progress function.
 
   Process at most 'ncmds' requests from the RECV communicator.
   Return number of requests processed, -1 if error
 */
-int ve_urpc_recv_progress(urpc_peer_t *up, int ncmds)
+int ve_urpc_recv_progress(urpc_peer_t *up, int ncmds, int maxinflight)
 {
 	int64_t req, dhq_req;
 	int done = 0;
 	urpc_mb_t m;
+	int inflight;
 
 	do {
 		done = 0;
+		inflight = MAX(dhq_in_flight(&up->recv), dhq_in_flight(&up->send));
 		// recv part
-		for (int i = 0; i < ncmds; i++) {
-			req = urpc_get_cmd(up->recv.tq, &m);
-			if (req < 0)
-				break;
-			dhq_req = dhq_cmd_in(&up->recv, &m, 1);
-			if (dhq_req != req) {
-				eprintf("call_handler sp send failed, req mismatch.\n");
-				return -1;
+		if (inflight < maxinflight) {
+			for (int i = 0; i < maxinflight - inflight; i++) {
+				req = urpc_get_cmd(up->recv.tq, &m);
+				if (req < 0)
+					break;
+				dhq_req = dhq_cmd_in(&up->recv, &m, 1);
+				if (dhq_req != req) {
+					eprintf("call_handler sp send failed, req mismatch.\n");
+					return -1;
+				}
+				done++;
 			}
-			done++;
 		}
+		inflight = MAX(dhq_in_flight(&up->recv), dhq_in_flight(&up->send));
 		done += dhq_dma_submit(&up->recv, 1);
 		done += dhq_cmd_check_done(&up->recv, 1);
-		done += dhq_cmd_handle(up, 1);
+                done += dhq_cmd_handle(up, 1);
 		// send part
 		done += dhq_dma_submit(&up->send, 0);
 		done += dhq_cmd_check_done(&up->send, 0);
 		done += dhq_cmd_handle(up, 0);
+#ifdef DEBUGMEM
+                if (done)
+			dhq_state(up);
+#endif
 	} while (done > 0);
 	return done;
 }
@@ -258,11 +252,11 @@ int ve_urpc_recv_progress(urpc_peer_t *up, int ncmds)
 /*
   Progress loop with timeout.
 */
-int ve_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us)
+int ve_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, int maxinflight, long timeout_us)
 {
 	long done_ts = 0;
 	do {
-		int done = ve_urpc_recv_progress(up, ncmds);
+		int done = ve_urpc_recv_progress(up, ncmds, maxinflight);
 		if (done == 0) {
 			if (done_ts == 0)
 				done_ts = get_time_us();
@@ -271,5 +265,19 @@ int ve_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us)
 
 	} while (done_ts == 0 || timediff_us(done_ts) < timeout_us);
 
+}
+
+void dhq_state(struct urpc_peer *up)
+{
+	dma_handler_t *dh;
+
+	dh = &up->recv.dhq;
+	printf("#########################################################\n");
+	printf("# DHQ recv: req=%4ld in=%3d submit=%3d done=%3d out=%3d #\n",
+	       dh->in_req, dh->in, dh->submit, dh->done, dh->out);
+	dh = &up->send.dhq;
+	printf("# DHQ send: req=%4ld in=%3d submit=%3d done=%3d out=%3d #\n",
+	       dh->in_req, dh->in, dh->submit, dh->done, dh->out);
+	printf("#########################################################\n");
 }
 

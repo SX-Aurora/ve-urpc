@@ -14,7 +14,8 @@ using veo::CallArgs;
 #define REPLY_TIMEOUT 2000000
 
 // multipart SEND/RECVFRAG transfer size
-#define PART_SENDFRAG ALIGN8B(URPC_DATA_BUFF_LEN >> 3)
+//#define PART_SENDFRAG ALIGN8B(URPC_DATA_BUFF_LEN >> 3)
+#define PART_SENDFRAG (6*1024*1024)
 
 namespace veo {
 
@@ -37,7 +38,6 @@ enum veo_urpc_cmd
 	URPC_CMD_FREE          = 11, // free buffer on VE
 	URPC_CMD_SENDBUFF      = 12, 
 	URPC_CMD_RECVBUFF      = 13,
-	URPC_CMD_SENDFRAG      = 14,
 	URPC_CMD_CALL          = 15, // simple call with no stack transfer
 	URPC_CMD_CALL_STKIN    = 16, // call with stack "IN" only
 	URPC_CMD_CALL_STKINOUT = 17, // call with stack IN and OUT
@@ -71,23 +71,24 @@ static inline int pickup_acks(urpc_peer_t *up, int acks)
 }
 
  
-void send_ping_nolock(urpc_peer_t *up);
-int64_t send_ack_nolock(urpc_peer_t *up);
-int64_t send_exception_nolock(urpc_peer_t *up, int64_t exc);
-
-int64_t send_read_mem_nolock(urpc_peer_t *up, uint64_t src, size_t size);
-int64_t send_write_mem_nolock(urpc_peer_t *up, uint64_t dst, size_t size, void *buff, size_t bsz);
-
-int wait_req_result(urpc_peer_t *up, int64_t req, int64_t *result);
-int wait_req_ack(urpc_peer_t *up, int64_t req);
-
 #ifndef __ve__
 int64_t send_call_nolock(urpc_peer_t *up, uint64_t ve_sp, uint64_t addr,
                          CallArgs &arg);
 int unpack_call_result(urpc_mb_t *m, CallArgs *arg, void *payload, size_t plen,
                        uint64_t *result);
+int wait_req_result(urpc_peer_t *up, int64_t req, int64_t *result);
+int wait_req_ack(urpc_peer_t *up, int64_t req);
 #endif
 
 } // namespace veo
+
+extern "C" {
+  void veo_urpc_register_handlers(urpc_peer_t *up);
+#ifdef __ve__
+  void veo_urpc_register_ve_handlers(urpc_peer_t *up);
+#else
+  void veo_urpc_register_vh_handlers(urpc_peer_t *up);
+#endif
+}
 
 #endif /* VEO_URPC_INCLUDE */

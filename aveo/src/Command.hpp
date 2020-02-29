@@ -45,7 +45,7 @@ public:
   uint64_t getID() { return this->msgid; }
   int getStatus() { return this->status; }
   uint64_t getRetval() { return this->retval; }
-  bool isVH() { return false; };
+  virtual bool isVH() = 0;
 };
 
 /**

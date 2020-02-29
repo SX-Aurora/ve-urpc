@@ -84,6 +84,9 @@ void ThreadContext::_progress_nolock(int ops)
 
   do {
     --ops;
+    //
+    // try to receive a command reply
+    //
     recvd = sent = 0;
     int64_t req = urpc_get_cmd(tq, &m);
     if (req >= 0) {
@@ -94,6 +97,9 @@ void ThreadContext::_progress_nolock(int ops)
         throw VEOException("URPC req without corresponding cmd!?", req);
       }
       set_recv_payload(uc, &m, &payload, &plen);
+      //
+      // call command "result function"
+      //
       auto rv = (*cmd)(&m, payload, plen);
       urpc_slot_done(tq, REQ2SLOT(req), &m);
       this->comq.pushCompletion(std::move(cmd));
@@ -104,7 +110,9 @@ void ThreadContext::_progress_nolock(int ops)
         return;
       }
     }
+    //
     // try to submit a new command
+    //
     if (urpc_next_send_slot(this->up) < 0) {
       continue;
     }
@@ -112,11 +120,17 @@ void ThreadContext::_progress_nolock(int ops)
     if (cmd) {
       if (cmd->isVH()) {
         if (this->comq.emptyInFlight()) {
+          //
+          // call command "submit function"
+          //
           auto rv = (*cmd)();
           this->comq.pushCompletion(std::move(cmd));
           ++sent;
         }
       } else {
+        //
+        // call command "submit function"
+        //
         auto rv = (*cmd)();
         if (rv == 0) {
           ++sent;
@@ -124,7 +138,7 @@ void ThreadContext::_progress_nolock(int ops)
         }
       }
     }
-  } while(recvd + sent > 0 && ops != 0);
+  } while(recvd + sent > 0); // || ops != 0);
 }
 
 /**
@@ -139,7 +153,7 @@ void ThreadContext::_progress_nolock(int ops)
  */
 void ThreadContext::progress(int ops)
 {
-  std::lock_guard<std::mutex> lock(this->submit_mtx);
+  //std::lock_guard<std::mutex> lock(this->submit_mtx);
   _progress_nolock(ops);
 }
 
@@ -180,37 +194,47 @@ uint64_t ThreadContext::callAsync(uint64_t addr, CallArgs &args)
     return VEO_REQUEST_ID_INVALID;
   
   auto id = this->issueRequestID();
-  auto f = [&args, this, addr, id] (Command *cmd) {
-    VEO_TRACE(this, "[request #%d] start...", id);
-    int req = send_call_nolock(this->up, this->ve_sp, addr, args);
-    VEO_TRACE(this, "[request #%d] VE-URPC req ID = %ld", id, req);
-    if (req >= 0) {
-      cmd->setURPCReq(req, VEO_COMMAND_UNFINISHED);
-    } else {
-      // TODO: anything more meaningful into result?
-      cmd->setResult(0, VEO_COMMAND_ERROR);
-      return -EAGAIN;
-    }
-    return 0;
-  };
+  //
+  // submit function, called when cmd is issued to URPC
+  //
+  auto f = [&args, this, addr, id] (Command *cmd)
+           {
+             VEO_TRACE(this, "[request #%d] start...", id);
+             int req = send_call_nolock(this->up, this->ve_sp, addr, args);
+             VEO_TRACE(this, "[request #%d] VE-URPC req ID = %ld", id, req);
+             if (req >= 0) {
+               cmd->setURPCReq(req, VEO_COMMAND_UNFINISHED);
+             } else {
+               // TODO: anything more meaningful into result?
+               cmd->setResult(0, VEO_COMMAND_ERROR);
+               return -EAGAIN;
+             }
+             return 0;
+           };
 
-  auto u = [&args, this, id] (Command *cmd, urpc_mb_t *m, void *payload, size_t plen) {
-    VEO_TRACE(this, "[request #%d] unpack...", id);
-    uint64_t result;
-    int rv = unpack_call_result(m, &args, payload, plen, &result);
-                                           
-    VEO_TRACE(this, "[request #%d] unpacked", id);
-    if (rv < 0) {
-      cmd->setResult(result, VEO_COMMAND_EXCEPTION);
-      return rv;
-    }
-    cmd->setResult(result, VEO_COMMAND_OK);
-    return 0;
-  };
+  //
+  // result function, called when response has arrived from URPC
+  //
+  auto u = [&args, this, id] (Command *cmd, urpc_mb_t *m, void *payload, size_t plen)
+           {
+             VEO_TRACE(this, "[request #%d] reply sendbuff received (cmd=%d)...", id, m->c.cmd);
+             uint64_t result;
+             int rv = unpack_call_result(m, &args, payload, plen, &result);
+             VEO_TRACE(this, "[request #%d] unpacked", id);
+             if (rv < 0) {
+               cmd->setResult(result, VEO_COMMAND_EXCEPTION);
+               return rv;
+             }
+             cmd->setResult(result, VEO_COMMAND_OK);
+             return 0;
+           };
 
   std::unique_ptr<Command> cmd(new internal::CommandImpl(id, f, u));
-  if(this->comq.pushRequest(std::move(cmd)))
-    return VEO_REQUEST_ID_INVALID;
+  {
+    std::lock_guard<std::mutex> lock(this->submit_mtx);
+    if(this->comq.pushRequest(std::move(cmd)))
+      return VEO_REQUEST_ID_INVALID;
+  }
   this->progress(3);
   return id;
 }
@@ -242,16 +266,20 @@ uint64_t ThreadContext::callVHAsync(uint64_t (*func)(void *), void *arg)
     return VEO_REQUEST_ID_INVALID;
 
   auto id = this->issueRequestID();
-  auto f = [this, func, arg, id] (Command *cmd) {
-    VEO_TRACE(this, "[request #%lu] start...", id);
-    auto rv = (*func)(arg);
-    VEO_TRACE(this, "[request #%lu] executed. (return %ld)", id, rv);
-    cmd->setResult(rv, VEO_COMMAND_OK);
-    VEO_TRACE(this, "[request #%lu] done", id);
-    return 0;
-  };
+  auto f = [this, func, arg, id] (Command *cmd)
+           {
+             VEO_TRACE(this, "[request #%lu] start...", id);
+             auto rv = (*func)(arg);
+             VEO_TRACE(this, "[request #%lu] executed. (return %ld)", id, rv);
+             cmd->setResult(rv, VEO_COMMAND_OK);
+             VEO_TRACE(this, "[request #%lu] done", id);
+             return 0;
+           };
   std::unique_ptr<Command> req(new internal::CommandImpl(id, f));
-  this->comq.pushRequest(std::move(req));
+  {
+    std::lock_guard<std::mutex> lock(this->submit_mtx);
+    this->comq.pushRequest(std::move(req));
+  }
   this->progress(3);
   return id;
 }

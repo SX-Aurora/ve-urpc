@@ -30,8 +30,11 @@ static void vh_urpc_comm_init(urpc_comm_t *uc)
 	TQ_WRITE32(uc->tq->receiver_flags, 0);
 	TQ_WRITE64(uc->tq->last_put_req, -1);
 	TQ_WRITE64(uc->tq->last_get_req, -1);
-	uc->free_begin = 0;
-	uc->free_end = URPC_DATA_BUFF_LEN;
+	uc->mem[0].begin = 0;
+	uc->mem[0].end = DATA_BUFF_END;
+	uc->mem[1].begin = 0;
+	uc->mem[1].end = 0;
+	uc->active = &uc->mem[0];
         pthread_mutex_init(&uc->lock, NULL);
 }
 
@@ -94,9 +97,7 @@ urpc_peer_t *vh_urpc_peer_create(void)
 	// initialize handler table
 	for (int i = 0; i <= URPC_MAX_HANDLERS; i++)
 		up->handler[i] = NULL;
-	handler_init_hook_t hook = urpc_get_handler_init_hook();
-	if (hook)
-		hook(up);
+        urpc_run_handler_init_hooks(up);
 
 	return up;
 }

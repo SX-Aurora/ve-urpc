@@ -56,15 +56,31 @@ int main(int argc, char **argv)
 	long ts, te;
 	double bw;
 	int do_send = 1, do_recv = 1;
+        int ntransfer = 0;
 	
-	if (argc == 2)
-		bsize = atol(argv[1]);
-	else if (argc == 3) {
+	if (argc == 2) {
+		if (strcmp(argv[1], "-h") == 0) {
+			printf("Usage:\n");
+			printf("%s [<size>]\n");
+			printf("%s send|recv <size> [<loops>]]\n");
+			return 0;
+		} else {
+			bsize = atol(argv[1]);
+		}
+	} else if (argc >= 3) {
 		if (strcmp(argv[1], "send") == 0)
 			do_recv = 0;
-		if (strcmp(argv[1], "recv") == 0)
+		else if (strcmp(argv[1], "recv") == 0)
 			do_send = 0;
-		bsize = atol(argv[2]);
+                else {
+			bsize = atol(argv[1]);
+			ntransfer = atoi(argv[2]);
+		}
+		if (do_send == 0 || do_recv == 0) {
+			bsize = atol(argv[2]);
+			if (argc > 3)
+				ntransfer = atoi(argv[3]);
+		}
 	}
 
 	rc = veo_init();
@@ -83,11 +99,15 @@ int main(int argc, char **argv)
 		goto finish;
 	}
 
-	if (bsize < 512 * 1024)
-		n = (int)(100 * 1.e6 / (double)bsize);
-	else
-		n = (int)(5.0 * 1.e9 / (double)bsize);
-	n > 0 ? n : 1;
+	if (ntransfer > 0)
+		n = ntransfer;
+	else {
+		if (bsize < 512 * 1024)
+			n = (int)(100 * 1.e6 / (double)bsize);
+		else
+			n = (int)(5.0 * 1.e9 / (double)bsize);
+		n > 0 ? n : 1;
+	}
 
 	if (do_send) {
 		ts = get_time_us();

@@ -19,7 +19,7 @@ int main()
 	printf("VE: set receiver flag to 1.\n");
 
 	while (!finish) {
-		int rc = ve_urpc_recv_progress(up, 3);
+          int rc = ve_urpc_recv_progress(up, 3, 10);
 	}
 	
 	ve_urpc_fini(up);

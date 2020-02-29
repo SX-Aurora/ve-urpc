@@ -69,8 +69,11 @@ public:
   uint64_t callVHAsync(uint64_t (*)(void *), void *);
   int callWaitResult(uint64_t, uint64_t *);
   int callPeekResult(uint64_t, uint64_t *);
-  //uint64_t asyncReadMem(void *, uint64_t, size_t);
-  //uint64_t asyncWriteMem(uint64_t, const void *, size_t);
+
+  uint64_t sendbuffAsync(uint64_t dst, void *src, size_t size);
+  uint64_t recvbuffAsync(void *dst, uint64_t src, size_t size);
+  uint64_t asyncReadMem(void *dst, uint64_t src , size_t size);
+  uint64_t asyncWriteMem(uint64_t dst, const void *src, size_t size);
 
   veo_thr_ctxt *toCHandle() {
     return reinterpret_cast<veo_thr_ctxt *>(this);

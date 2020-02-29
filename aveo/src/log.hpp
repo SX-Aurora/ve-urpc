@@ -27,19 +27,23 @@ void veo__log(const ThreadContext *, const log4c_location_info_t *,
 #define VEO_LOG(ctx, prio, fmt, ...) do { \
   const log4c_location_info_t location__ = \
     LOG4C_LOCATION_INFO_INITIALIZER(NULL); \
-  dprintf(fmt, ## __VA_ARGS__); \
+  printf("[VH] " fmt, ## __VA_ARGS__); \
 } while (0)
 
 #endif
 
+#if 0
 #define VEO_ERROR(ctx, fmt, ...) do {                 \
   VEO_LOG(ctx, veo::VEO_LOG_ERROR, fmt, ## __VA_ARGS__); \
   printf("VEO_ERROR " fmt, __VA_ARGS__);              \
   } while(0)
-#define VEO_DEBUG(ctx, fmt, ...) VEO_LOG(ctx, veo::VEO_LOG_DEBUG, "[DEBUG]" fmt "\n", \
-                                         ## __VA_ARGS__)
-#define VEO_TRACE(ctx, fmt, ...) VEO_LOG(ctx, veo::VEO_LOG_TRACE, "[TRACE]" fmt "\n", \
-                                         ## __VA_ARGS__)
+#define VEO_DEBUG(ctx, fmt, ...) VEO_LOG(ctx, veo::VEO_LOG_DEBUG, "[DEBUG]" fmt "\n", ## __VA_ARGS__)
+#define VEO_TRACE(ctx, fmt, ...) VEO_LOG(ctx, veo::VEO_LOG_TRACE, "[TRACE]" fmt "\n", ## __VA_ARGS__)
+#endif
+
+#define VEO_ERROR(ctx, fmt, ...) eprintf("VEO_ERROR " fmt "\n", ## __VA_ARGS__)
+#define VEO_DEBUG(ctx, fmt, ...) dprintf("[VH DEBUG] " fmt "\n", ## __VA_ARGS__)
+#define VEO_TRACE(ctx, fmt, ...) dprintf("[VH TRACE] " fmt "\n", ## __VA_ARGS__)
 
 #define VEO_ASSERT(_cond) do { \
   if (!(_cond)) { \

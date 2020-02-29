@@ -5,17 +5,22 @@ extern "C"
 #ifdef __ve__
 static inline void ve_inst_fenceSF(void)
 {
-    asm ("fencem 1":::"memory");
+    asm volatile ("fencem 1":::"memory");
 }
 
 static inline void ve_inst_fenceLF(void)
 {
-    asm ("fencem 2":::"memory");
+    asm volatile ("fencem 2":::"memory");
 }
 
 static inline void ve_inst_fenceLSF(void)
 {
-    asm ("fencem 3":::"memory");
+    asm volatile ("fencem 3":::);
+}
+
+static inline void ve_inst_fenceC7(void)
+{
+    asm volatile ("fencec 7":::);
 }
 
 static inline uint64_t ve_inst_lhm(void *vehva)
@@ -34,12 +39,12 @@ static inline uint32_t ve_inst_lhm32(void *vehva)
 
 static inline void ve_inst_shm(void *vehva, uint64_t value)
 {
-    asm ("shm.l %0,0(%1)"::"r"(value),"r"(vehva));
+    asm volatile ("shm.l %0,0(%1)"::"r"(value),"r"(vehva));
 }
 
 static inline void ve_inst_shm32(void *vehva, uint32_t value)
 {
-    asm ("shm.w %0,0(%1)"::"r"(value),"r"(vehva));
+    asm volatile ("shm.w %0,0(%1)"::"r"(value),"r"(vehva));
 }
 
 #endif

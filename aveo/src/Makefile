@@ -10,8 +10,11 @@ DEFINES := -DVEORUN_BIN=\"$(VEORUN_BIN)\"
 GPPFLAGS := $(GPPFLAGS) $(DEFINES)
 LDFLAGS := -Wl,-rpath,$(abspath $(DEST)/lib) -Wl,-rpath,$(abspath $(BLIB)) -L$(BLIB)
 
-VHLIB_OBJS := $(addprefix $(BVH)/,ProcHandle.o ThreadContext.o Command.o CallArgs.o veo_api.o veo_urpc.o log.o)
-VELIB_OBJS := $(addprefix $(BVE)/,veo_urpc.o)
+VHLIB_OBJS := $(addprefix $(BVH)/,\
+ ProcHandle.o ThreadContext.o AsyncTransfer.o Command.o CallArgs.o veo_api.o veo_urpc.o veo_urpc_vh.o log.o)
+
+VELIB_OBJS := $(addprefix $(BVE)/,veo_urpc.o veo_urpc_ve.o)
+
 LIBS = $(addprefix $(BLIB)/,libveoVE.so libveoVH.so libveoVE.a libveoVH.a)
 INCLUDES := ve_offload.h
 
@@ -31,6 +34,9 @@ install: $(LIBS) | $(DEST)/lib/ $(DEST)/include/ $(dir $(VEORUN_BIN))/
 
 
 %/ProcHandle.o: ProcHandle.cpp ProcHandle.hpp VEOException.hpp veo_urpc.hpp CallArgs.hpp log.hpp
+%/ThreadContext.o: ThreadContext.cpp ThreadContext.hpp VEOException.hpp veo_urpc.hpp CallArgs.hpp \
+                   CommandImpl.hpp log.hpp
+%/AsyncTransfer.o: AsyncTransfer.cpp ThreadContext.hpp VEOException.hpp CommandImpl.hpp log.hpp
 %/CallArgs.o: CallArgs.cpp CallArgs.hpp VEOException.hpp ve_offload.h
 %/veo_urpc.o: veo_urpc.c veo_urpc.hpp
 %/veo_api.o: veo_api.cpp ProcHandle.hpp CallArgs.hpp VEOException.hpp log.hpp

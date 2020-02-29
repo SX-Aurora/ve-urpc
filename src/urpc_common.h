@@ -30,6 +30,11 @@
 #define URPC_OFFSET_BITS (29)
 #define URPC_DATA_BUFF_LEN (URPC_BUFF_LEN - 8*(URPC_LEN_MB + 2))
 
+//
+// Strangely, if we hit the boundary, DMA gets a memory protection exception
+//
+#define DATA_BUFF_END (URPC_DATA_BUFF_LEN - 4096)
+
 /* threshold to switch from lhm/shm to user DMA */
 #define URPC_MIN_DMA_SIZE (16)
 #define URPC_DELAY_PEEK 1
@@ -39,6 +44,7 @@
 #define REQ2SLOT(r) (int32_t)((r) & (URPC_LEN_MB - 1))
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 #define ALIGN8B(x) (((uint64_t)(x) + 7UL) & ~7UL)
 
@@ -47,13 +53,21 @@
 # define TQ_READ32(v) ve_inst_lhm32((void *)&(v))
 # define TQ_WRITE64(var,val) ve_inst_shm((void *)&(var), val)
 # define TQ_WRITE32(var,val) ve_inst_shm32((void *)&(var), val)
-# define TQ_FENCE() ve_inst_fenceLSF()
+# define TQ_FENCE() do {                        \
+	ve_inst_fenceSF();			\
+	ve_inst_fenceLF();			\
+	} while(0)
+#define TQ_FENCE_L() ve_inst_fenceLF()
+#define TQ_FENCE_S() ve_inst_fenceSF()
+
 #else
 # define TQ_READ64(v) (v)
 # define TQ_READ32(v) (v)
 # define TQ_WRITE64(var,val) (var) = (val)
 # define TQ_WRITE32(var,val) (var) = (val)
 # define TQ_FENCE()
+# define TQ_FENCE_L()
+# define TQ_FENCE_S()
 #endif
 
 /*
@@ -132,7 +146,7 @@ struct transfer_queue {
 	volatile int64_t last_put_req;
 	volatile int64_t last_get_req;
 	volatile urpc_mb_t mb[URPC_LEN_MB];
-	volatile uint64_t data[URPC_BUFF_LEN/sizeof(uint64_t) - URPC_LEN_MB - 2];
+	volatile uint64_t data[DATA_BUFF_END / sizeof(uint64_t)];
 };
 typedef struct transfer_queue transfer_queue_t;
 
@@ -157,14 +171,20 @@ struct dma_handler {
 };
 typedef struct dma_handler dma_handler_t;
 #endif
-	
+
+struct free_block {
+	uint32_t begin;	// offset of beginning of free block
+	uint32_t end;	// offset of end of free block
+};
+typedef struct free_block free_block_t;
+
 struct urpc_comm {
 	// payload buffer memory management
 	// memory block associated to each mailbox slot in transfer queue
 	pthread_mutex_t lock;
 	mlist_t mlist[URPC_LEN_MB];
-	uint32_t free_begin;	// offset of beginning of free block
-	uint32_t free_end;	// offset of end of free block
+	free_block_t *active;	// active memory block
+	free_block_t mem[2];	// free memory blocks
 	transfer_queue_t *tq;	// communication buffer in shared memory segment
 #ifdef __ve__
 	dma_handler_t dhq;		// handles async DMA transfers
@@ -205,15 +225,14 @@ struct urpc_peer {
 	urpc_handler_func handler[256];
 };
 
-typedef void (*handler_init_hook_t)(urpc_peer_t *);
-
 #ifdef __ve__
 
 urpc_peer_t *ve_urpc_init(int segid, int core);
 void ve_urpc_fini(urpc_peer_t *up);
 int ve_transfer_data_sync(uint64_t dst_vehva, uint64_t src_vehva, int len);
-int ve_urpc_recv_progress(urpc_peer_t *up, int ncmds);
-int ve_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us);
+int ve_urpc_recv_progress(urpc_peer_t *up, int ncmds, int maxinflight);
+int ve_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, int maxinflight, long timeout_us);
+void dhq_state(urpc_peer_t *up);
 
 #else
 
@@ -244,7 +263,8 @@ int urpc_recv_req_timeout(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
                           long timeout_us, void **payload, size_t *plen);
 int urpc_register_handler(urpc_peer_t *up, int cmd, urpc_handler_func handler);
 void urpc_set_handler_init_hook(void (*func)(urpc_peer_t *up));
-handler_init_hook_t urpc_get_handler_init_hook(void);
+void urpc_run_handler_init_hooks(urpc_peer_t *up);
+uint64_t alloc_payload(urpc_comm_t *uc, uint32_t size);
 
 #ifdef __cplusplus
 }

@@ -21,83 +21,6 @@ int wait_peer_attach(urpc_peer_t *up)
 #endif
 }
 
-/*
-  Free payload blocks of finished requests and adjust free block pointers
- */
-static uint32_t _gc_buffer(urpc_comm_t *uc)
-{
-	uint32_t last_req = TQ_READ64(uc->tq->last_put_req);
-	uint32_t last_slot = REQ2SLOT(last_req);
-	TQ_FENCE();
-	// if we're at the end of the buffer, assign the tiny rest to the
-	// last sent request
-	if (uc->free_end == URPC_DATA_BUFF_LEN) {
-		mlist_t *ml = &uc->mlist[last_slot];
-		if (ml->b.len == 0)
-			ml->b.offs = uc->free_begin;
-		ml->b.len = uc->free_end - ml->b.offs;
-		uc->free_begin = uc->free_end = 0;
-		dprintf("gc: free_begin=%u free_end=%u\n", uc->free_begin, uc->free_end);
-	}
-	//
-	// loop through req slots and free the ones which are finished
-	//
-	for (int i = 1; i <= URPC_LEN_MB; i++) {
-		int slot = (last_slot + i) % URPC_LEN_MB;
-		mlist_t *ml = &uc->mlist[slot];
-		urpc_mb_t m;
-		m.u64 = TQ_READ64(uc->tq->mb[slot].u64);
-		TQ_FENCE();
-		if (m.c.cmd == URPC_CMD_NONE && ml->b.len > 0) {
-			if (uc->free_end < URPC_DATA_BUFF_LEN)
-				uc->free_end = ALIGN8B(ml->b.offs + ml->b.len);
-			ml->u64 = 0;
-			TQ_WRITE64(uc->tq->mb[slot].u64, 0);
-		}
-	}
-	dprintf("gc: free_begin=%u free_end=%u DBL=%u\n",
-		uc->free_begin, uc->free_end, URPC_DATA_BUFF_LEN);
-	return uc->free_end - uc->free_begin;
-}
-	
-/*
-  Allocate a payload buffer.
-
-  Returns 0 if allocation failed, otherwise a urpc_mb_t with empty command field
-  but filled offs and len fields.
- */
-static uint64_t _alloc_payload(urpc_comm_t *uc, uint32_t size)
-{
-	urpc_mb_t res;
-	uint32_t asize = ALIGN8B(size);
-        long ts = get_time_us();
-
-	res.u64 = 0;
-	while (uc->free_end - uc->free_begin < asize) {
-		uint32_t new_free = _gc_buffer(uc);
-		if (new_free < size) {
-			// TODO: delay, count, timeout
-			if (timediff_us(ts) > URPC_ALLOC_TIMEOUT_US) {
-				eprintf("ERROR: alloc_payload timed out!\n");
-				return 0;
-			}
-		} else {
-			break;
-                }
-	}
-	if (uc->free_begin + asize > uc->free_end) {
-		printf("alloc: free_begin=%u free_end=%u asize=%u\n",
-		       uc->free_begin, uc->free_end, asize);
-		return 0;
-	}
-		
-	res.c.offs = uc->free_begin;
-	uc->free_begin += ALIGN8B(size);
-	res.c.len = size;
-
-	return res.u64;
-}
-
 uint32_t urpc_get_receiver_flags(urpc_comm_t *uc)
 {
 	return TQ_READ32(uc->tq->receiver_flags);
@@ -138,7 +61,7 @@ int64_t urpc_get_cmd(transfer_queue_t *tq, urpc_mb_t *m)
 		slot = REQ2SLOT(req);
 		m->u64 = TQ_READ64(tq->mb[slot].u64);
 		dprintf("urpc_get_cmd req=%ld cmd=%u offs=%u len=%u\n",
-                        req, m->c.cmd, m->c.offs, m->c.len);
+			req, m->c.cmd, m->c.offs, m->c.len);
 		TQ_WRITE64(tq->last_get_req, req);
 		TQ_FENCE();
 	}
@@ -246,26 +169,32 @@ int64_t urpc_put_cmd(urpc_peer_t *up, urpc_mb_t *m)
 
 	TQ_FENCE();
 	slot = REQ2SLOT(req);
+        // wait for next slot to become free
 	do {
 		next.u64 = TQ_READ64(tq->mb[slot].u64);
 		TQ_FENCE();
 		// TODO: timeout
 	} while(next.c.cmd != URPC_CMD_NONE);
 
+#if 0
+        // next slot is free now, if its memory wasn't garbage collected
+        // then try to merge it with the free_end of the free space.
+        // We do this only if the free_end is not at the upper limit.
 	mlist_t *ml = &uc->mlist[slot];
-
 	if (ml->b.len) {
-		if (uc->free_end < URPC_DATA_BUFF_LEN) {
-			if (ml->b.offs == uc->free_end)
-				uc->free_end += ml->b.len;
+		for (int b = 0; b < 2; b++) {
+			if (uc->mem[b].end < DATA_BUFF_END) {
+				if (ml->b.offs == uc->mem[b].end) {
+					uc->mem[b].end += ALIGN8B(ml->b.len);
+					_report_free(uc, "[urpc_put_cmd]");
+					_try_merge_blocks(uc);
+					_report_free(uc, "merge after [urpc_put_cmd]");
+					break;
+				}
+			}
 		}
 	}
-	if (m->c.len) {
-		ml->b.len = m->c.len;
-		ml->b.offs = m->c.offs;
-	} else
-		ml->u64 = 0;
-
+#endif
 	TQ_WRITE64(tq->mb[slot].u64, m->u64);
 	TQ_WRITE64(tq->last_put_req, req);
         dprintf("urpc_put_cmd req=%ld cmd=%u offs=%u len=%u\n",
@@ -286,6 +215,7 @@ int set_recv_payload(urpc_comm_t *uc, urpc_mb_t *m, void **payload, size_t *plen
 #ifdef __ve__
 		*payload = (void *)((char *)uc->mirr_data_buff + m->c.offs);
 		*plen = m->c.len;
+#if 0
 		if (*plen <= 16) {
 			int aoffs = m->c.offs >> 3;  // divide by 8
 			for (int i = 0; i < *plen >> 3; i++) {
@@ -305,6 +235,7 @@ int set_recv_payload(urpc_comm_t *uc, urpc_mb_t *m, void **payload, size_t *plen
 				return -EIO;
 			}
 		}
+#endif
 #else
 		*payload = (void *)((char *)&tq->data[0] + m->c.offs);
 		*plen = m->c.len;
@@ -354,6 +285,7 @@ int urpc_register_handler(urpc_peer_t *up, int cmd, urpc_handler_func handler)
 	if (up->handler[cmd])
 		return -EEXIST;
 	up->handler[cmd] = handler;
+        dprintf("registered handler for cmd=%d\n", cmd);
 	return cmd;
 }
 
@@ -441,13 +373,16 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
 	va_end(ap1);
         dprintf("generic_send allocating %ld bytes payload\n", size);
 	if (size) {
+#ifdef __ve__
+		//dhq_state(up);
+#endif
 		// allocate payload on data buffer
-		mb.u64 = _alloc_payload(uc, (uint32_t)size);
+		mb.u64 = alloc_payload(uc, (uint32_t)size);
 		if (mb.u64 == 0) {
 			dprintf("generic_send: failed to allocate payload\n");
 			eprintf("ERROR: urpc_alloc_payload failed!");
                         //pthread_mutex_unlock(&uc->lock);
-			return -ENOMEM;
+			return -1;
 		}
 
 		// fill payload buffer
@@ -487,32 +422,21 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
 
 	}
 	va_end(ap2);
-
 	mb.c.cmd = cmd;
 
-        // on VE: do the DMA/data transfer
-#if 0
-	if (size) {
-		rc = ve_transfer_data_sync(uc->shm_data_vehva + mb.c.offs,
-					   uc->mirr_data_vehva + mb.c.offs,
-					   mb.c.len);
-		if (rc) {
-			eprintf("[VE ERROR] ve_dma_post_wait send failed: %x\n", rc);
-                        //pthread_mutex_unlock(&uc->lock);
-			return -EIO;
-		}
-	}
-	
-	// send command
-        req = urpc_put_cmd(up, &mb);
-#else
 #ifdef __ve__
+        // on VE: submit to async DMA handler
 	req = dhq_cmd_in(uc, &mb, 0);
 #else
-	// send command
+	// on VH: send command
         req = urpc_put_cmd(up, &mb);
 #endif
-#endif
+	mlist_t *ml = &uc->mlist[REQ2SLOT(req)];
+	if (mb.c.len) {
+		ml->b.len = mb.c.len;
+		ml->b.offs = mb.c.offs;
+	} else
+		ml->u64 = 0;
 
         //pthread_mutex_unlock(&uc->lock);
 	return req;
@@ -591,5 +515,9 @@ int urpc_unpack_payload(void *payload, size_t psz, char *fmt, ...)
 	if (lsz < 0)
 		rc = -1;
 	va_end(ap);
+#ifdef __ve__
+        ve_inst_fenceLF();
+        ve_inst_fenceSF();
+#endif
 	return rc;
 }

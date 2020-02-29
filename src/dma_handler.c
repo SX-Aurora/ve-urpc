@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "urpc_common.h"
+#include "ve_inst.h"
 
 // Flow:
 // 1. insert decoded cmd
@@ -35,6 +36,16 @@ void init_dma_handler(urpc_comm_t *uc)
 	dh->in_req = -1;
 }
 
+int dhq_in_flight(urpc_comm_t *uc)
+{
+	int res;
+	
+	res = uc->dhq.in - uc->dhq.out;
+	if (res < 0)
+		res += URPC_LEN_MB;
+	return res;
+}
+
 int64_t dhq_cmd_in(urpc_comm_t *uc, urpc_mb_t *m, int is_recv)
 {
 	dma_handler_t *dh = &uc->dhq;
@@ -44,7 +55,10 @@ int64_t dhq_cmd_in(urpc_comm_t *uc, urpc_mb_t *m, int is_recv)
 	dh->in = REQ2SLOT(dh->in_req);
 	dh->cmd[dh->in].u64 = m->u64;
         dprintf("dhq_cmd_in() %s cmd=%d req=%ld in=%d submit=%d done=%d out=%d\n",
-		is_recv ? "recv" : "send", m->c.cmd, dh->in_req, dh->in, dh->submit, dh->done, dh->out);
+	       is_recv ? "recv" : "send", m->c.cmd, dh->in_req, dh->in, dh->submit, dh->done, dh->out);
+	dprintf("dhq_cmd_in cmd=%u offs=%u len=%u\n",
+	       dh->cmd[dh->in].c.cmd, dh->cmd[dh->in].c.offs, dh->cmd[dh->in].c.len);
+
 	return dh->in_req;
 }
 
@@ -89,6 +103,7 @@ int dhq_cmd_check_done(urpc_comm_t *uc, int is_recv)
 	ncheck = dh->submit - dh->done;
 	if (dh->submit < dh->done)
 		ncheck += URPC_LEN_MB;
+	if (ncheck)
         dprintf("dhq_cmd_check_done() %s ncheck=%d\n", is_recv ? "recv" : "send", ncheck);
 
 	for (i = 0, start = dh->done + 1; i < ncheck; i++) {
@@ -103,9 +118,11 @@ int dhq_cmd_check_done(urpc_comm_t *uc, int is_recv)
 		rc = ve_dma_poll(&dh->handle[slot]);
                 dprintf("dhq_cmd_check_done() %s i=%d ve_dma_poll returned %d\n",
 			is_recv ? "recv" : "send", i, rc);
-		if (rc == -EAGAIN)
+		if (rc == -EAGAIN) {
+			dprintf("dhq_cmd_check_done() %s i=%d ve_dma_poll returned %d\n",
+				is_recv ? "recv" : "send", i, rc);
 			break;		// not done, yet, no further checking
-		else if (rc == 0) {
+		} else if (rc == 0) {
 			// done
 			dh->done = slot;
 			continue;
@@ -116,6 +133,7 @@ int dhq_cmd_check_done(urpc_comm_t *uc, int is_recv)
 			break;
 		}
 	}
+	if (ncheck)
         dprintf("dhq_cmd_check_done() %s in=%d submit=%d done=%d out=%d\n",
 		is_recv ? "recv" : "send", dh->in, dh->submit, dh->done, dh->out);
 	return ncheck;
@@ -138,6 +156,7 @@ int dhq_dma_submit(urpc_comm_t *uc, int is_recv)
 	ncheck = dh->in - dh->submit;
 	if (dh->in < dh->submit)
 		ncheck += URPC_LEN_MB;
+	if (ncheck)
         dprintf("dhq_dma_submit() %s ncheck=%d\n", is_recv ? "recv" : "send", ncheck);
 
 	// TODO: implement coalescing transfers!
@@ -157,14 +176,22 @@ int dhq_dma_submit(urpc_comm_t *uc, int is_recv)
 			dst = uc->shm_data_vehva + m->c.offs;
 		}
 		size = m->c.len;
+		if (m->c.offs + size > URPC_BUFF_LEN) {
+			eprintf("DMA req out of bounds! offs=%d size=%ld\n",
+				m->c.offs, size);
+		}
+		dprintf("DMA req (%s) slot %3d cmd=%2d offs=%d len=%d\n",
+		       is_recv ? "recv" : "send", slot, m->c.cmd, m->c.offs, m->c.len);
 		rc = ve_dma_post(dst, src, size, &dh->handle[slot]);
-                dprintf("dhq_dma_submit() %s i=%d ve_dma_post returned %d\n",
-			is_recv ? "recv" : "send", i, rc);
+		if (rc != 0)
+			dprintf("dhq_dma_submit() %s i=%d ve_dma_post returned %d\n",
+			       is_recv ? "recv" : "send", i, rc);
 		if (rc == -EAGAIN)
 			break;
 		// all went well! move pointer
 		dh->submit = slot;
 	}
+	if (ncheck)
         dprintf("dhq_dma_submit() %s in=%d submit=%d done=%d out=%d\n",
 		is_recv ? "recv" : "send", dh->in, dh->submit, dh->done, dh->out);
 	return ncheck;
@@ -201,6 +228,7 @@ int dhq_cmd_handle(urpc_peer_t *up, int is_recv)
 	ncheck = dh->done - dh->out;
 	if (dh->done < dh->out)
 		ncheck += URPC_LEN_MB;
+	if (ncheck)
         dprintf("dhq_cmd_handle() %s ncheck=%d\n", is_recv ? "recv" : "send", ncheck);
 
 	for (i = 0, start = REQ2SLOT(dh->out + 1); i < ncheck; i++) {
@@ -247,6 +275,7 @@ int dhq_cmd_handle(urpc_peer_t *up, int is_recv)
 
 		}
 	}
+	if (ncheck)
         dprintf("dhq_cmd_handle() %s in=%d submit=%d done=%d out=%d\n",
 		is_recv ? "recv" : "send", dh->in, dh->submit, dh->done, dh->out);
         return ncheck;

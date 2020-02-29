@@ -1,6 +1,10 @@
 #include "urpc_common.h"
 
-handler_init_hook_t urpc_handler_init_hook = NULL;
+#define MAX_INIT_HOOKS 10
+static int num_hooks = 0;
+
+typedef void (*handler_init_hook_t)(urpc_peer_t *);
+static handler_init_hook_t init_hook[MAX_INIT_HOOKS] = { NULL };
 
 /*
   Register VH side handler init hook.
@@ -9,14 +13,19 @@ handler_init_hook_t urpc_handler_init_hook = NULL;
 */
 void urpc_set_handler_init_hook(void (*func)(urpc_peer_t *up))
 {
-	urpc_handler_init_hook = func;
+	if (num_hooks < MAX_INIT_HOOKS)
+		init_hook[num_hooks++] = func;
+	else {
+		eprintf("Maximum number of handler init hooks reached! Ignoring set request.\n");
+	}
 }
 
 /*
-  Return pointer to urdm_peer init hook function, if set.
+  Run init hook functions.
  */
-handler_init_hook_t urpc_get_handler_init_hook(void)
+void urpc_run_handler_init_hooks(urpc_peer_t *up)
 {
-	return urpc_handler_init_hook;
+	for (int i = 0; i < num_hooks; i++)
+		init_hook[i](up);
 }
 
