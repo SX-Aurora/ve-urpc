@@ -36,7 +36,8 @@
 #define DATA_BUFF_END (URPC_DATA_BUFF_LEN - 4096)
 
 /* threshold to switch from lhm/shm to user DMA */
-#define URPC_MIN_DMA_SIZE (16)
+#define URPC_MAX_COALESCED_SIZE (512*1024)
+#define URPC_MAX_COALESCED_REQS (30)
 #define URPC_DELAY_PEEK 1
 #define URPC_TIMEOUT_US (10 * 1000000)
 #define URPC_ALLOC_TIMEOUT_US (60 * 1000000)
@@ -168,6 +169,7 @@ struct dma_handler {
 	int64_t in_req;			//!< URPC req number of 'in' cmd
 	urpc_mb_t cmd[URPC_LEN_MB];
 	ve_dma_handle_t handle[URPC_LEN_MB];
+	int8_t coalesced[URPC_LEN_MB];	//!< value is true if slot transfer is coalesced
 };
 typedef struct dma_handler dma_handler_t;
 #endif

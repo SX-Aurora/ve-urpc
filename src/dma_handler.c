@@ -34,6 +34,8 @@ void init_dma_handler(urpc_comm_t *uc)
 
 	dh->in = dh->submit = dh->done = dh->out = -1;
 	dh->in_req = -1;
+        for (int i = 0; i < URPC_LEN_MB; i++)
+		dh->coalesced[i] = 0;
 }
 
 int dhq_in_flight(urpc_comm_t *uc)
@@ -114,6 +116,10 @@ int dhq_cmd_check_done(urpc_comm_t *uc, int is_recv)
 			dh->done = slot;
 			continue;
 		}
+		if (dh->coalesced[slot]) {
+			dh->done = slot;
+			continue;
+		}
 		// check DMA handle
 		rc = ve_dma_poll(&dh->handle[slot]);
                 dprintf("dhq_cmd_check_done() %s i=%d ve_dma_poll returned %d\n",
@@ -149,6 +155,8 @@ int dhq_dma_submit(urpc_comm_t *uc, int is_recv)
 {
 	int i, ncheck, rc, size, slot, start;
 	uint64_t src, dst;
+	uint64_t csrc = 0, cdst = 0;
+        int csize = 0, ncoal = 0, cslot, coal_stop;
 	dma_handler_t *dh = &uc->dhq;
 
 	// check if any DMA handles have finished in the mean time
@@ -180,16 +188,51 @@ int dhq_dma_submit(urpc_comm_t *uc, int is_recv)
 			eprintf("DMA req out of bounds! offs=%d size=%ld\n",
 				m->c.offs, size);
 		}
-		dprintf("DMA req (%s) slot %3d cmd=%2d offs=%d len=%d\n",
-		       is_recv ? "recv" : "send", slot, m->c.cmd, m->c.offs, m->c.len);
-		rc = ve_dma_post(dst, src, size, &dh->handle[slot]);
+		if (csize == 0) { // this is the first field of possible coalescing
+			csize = size;
+			csrc = src;
+			cdst = dst;
+			dh->coalesced[slot] = 0;
+			coal_stop = 0;
+			cslot = slot;
+		} else {
+			if (src == csrc + csize && dst == cdst + csize &&
+			    csize + size <= URPC_MAX_COALESCED_SIZE) {
+				csize += size;
+				dh->coalesced[slot] = 1;
+				ncoal++;
+				cslot = REQ2SLOT(cslot + 1);
+			} else {
+				coal_stop = 1;
+				dh->coalesced[slot] = 0;
+			}
+		}
+		if (ncoal == URPC_MAX_COALESCED_REQS ||
+		    coal_stop == 1) {			// submit!
+			rc = ve_dma_post(cdst, csrc, csize, &dh->handle[slot]);
+			if (rc != 0)
+				dprintf("dhq_dma_submit() %s i=%d ve_dma_post returned %d\n",
+					is_recv ? "recv" : "send", i, rc);
+			if (rc == -EAGAIN)
+				break;
+			dh->submit = slot;
+			csrc = cdst = 0; csize = 0;
+			if (slot != cslot) {		// starting new coalescing
+				csrc = src;
+				cdst = dst;
+				csize = size;
+				coal_stop = 0;
+				cslot = slot;
+			}
+		}
+	}
+	if (csize) {
+		rc = ve_dma_post(cdst, csrc, csize, &dh->handle[cslot]);
 		if (rc != 0)
 			dprintf("dhq_dma_submit() %s i=%d ve_dma_post returned %d\n",
-			       is_recv ? "recv" : "send", i, rc);
-		if (rc == -EAGAIN)
-			break;
-		// all went well! move pointer
-		dh->submit = slot;
+			is_recv ? "recv" : "send", i, rc);
+		if (rc == 0)
+			dh->submit = cslot;
 	}
 	if (ncheck)
         dprintf("dhq_dma_submit() %s in=%d submit=%d done=%d out=%d\n",
@@ -229,7 +272,7 @@ int dhq_cmd_handle(urpc_peer_t *up, int is_recv)
 	if (dh->done < dh->out)
 		ncheck += URPC_LEN_MB;
 	if (ncheck)
-        dprintf("dhq_cmd_handle() %s ncheck=%d\n", is_recv ? "recv" : "send", ncheck);
+		dprintf("dhq_cmd_handle() %s ncheck=%d\n", is_recv ? "recv" : "send", ncheck);
 
 	for (i = 0, start = REQ2SLOT(dh->out + 1); i < ncheck; i++) {
 		slot = REQ2SLOT(start + i);
