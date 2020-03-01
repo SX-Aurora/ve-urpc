@@ -35,7 +35,7 @@ private:
   std::unordered_set<uint64_t> rem_reqid; // TODO: move this away from here!
   std::mutex req_mtx;   //!< protects rem_reqid
   std::mutex submit_mtx;//!< for synchronous calls prohibit submission of new reqs
-  std::mutex prog_mtx;	// ensure that progress is not called concurrently
+  std::recursive_mutex prog_mtx;	// ensure that progress is not called concurrently
 
   void _progress_nolock(int ops);
   void progress(int ops);

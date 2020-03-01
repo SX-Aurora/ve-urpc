@@ -3,6 +3,7 @@
 
 //#define DEBUG 1
 //#define DEBUGMEM
+//#define SYNCDMA
 
 #ifdef DEBUG
 

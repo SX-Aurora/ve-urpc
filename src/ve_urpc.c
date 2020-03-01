@@ -204,6 +204,20 @@ void ve_urpc_fini(urpc_peer_t *up)
 }
 
 /*
+  Transfer buffer to from SHM area.
+
+  The transfer length is smaller that the maximum transfer doable in one
+  DMA descriptor (<128MiB).
+*/
+int ve_transfer_data_sync(uint64_t dst_vehva, uint64_t src_vehva, int len)
+{
+       int err;
+
+       err = ve_dma_post_wait(dst_vehva, src_vehva, len);
+       return err;
+}
+
+/*
   URPC progress function.
 
   Process at most 'ncmds' requests from the RECV communicator.
@@ -216,6 +230,36 @@ int ve_urpc_recv_progress(urpc_peer_t *up, int ncmds, int maxinflight)
 	urpc_mb_t m;
 	int inflight;
 
+#ifdef SYNCDMA
+	urpc_comm_t *uc = &up->recv;
+	transfer_queue_t *tq = uc->tq;
+        urpc_handler_func func = NULL;
+        void *payload;
+        size_t plen;
+        int err;
+	while (done < ncmds) {
+		int64_t req = urpc_get_cmd(tq, &m);
+		if (req < 0)
+			break;
+		//
+		// set/receive payload, if needed
+		//
+		set_recv_payload(uc, &m, &payload, &plen);
+		//
+		// call handler
+		//
+		func = up->handler[m.c.cmd];
+		if (func) {
+			err = func(up, &m, req, payload, plen);
+			if (err)
+				eprintf("Warning: RPC handler %d returned %d\n",
+					m.c.cmd, err);
+		}
+
+		urpc_slot_done(tq, REQ2SLOT(req), &m);
+		++done;
+	}
+#else
 	do {
 		done = 0;
 		inflight = MAX(dhq_in_flight(&up->recv), dhq_in_flight(&up->send));
@@ -246,6 +290,7 @@ int ve_urpc_recv_progress(urpc_peer_t *up, int ncmds, int maxinflight)
 			dhq_state(up);
 #endif
 	} while (done > 0);
+#endif // SYNCDMA
 	return done;
 }
 

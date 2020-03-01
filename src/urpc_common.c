@@ -223,7 +223,7 @@ int set_recv_payload(urpc_comm_t *uc, urpc_mb_t *m, void **payload, size_t *plen
 #ifdef __ve__
 		*payload = (void *)((char *)uc->mirr_data_buff + m->c.offs);
 		*plen = m->c.len;
-#if 0
+#ifdef SYNCDMA
 		if (*plen <= 16) {
 			int aoffs = m->c.offs >> 3;  // divide by 8
 			for (int i = 0; i < *plen >> 3; i++) {
@@ -432,6 +432,23 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
 	va_end(ap2);
 	mb.c.cmd = cmd;
 
+#ifdef SYNCDMA
+#ifdef __ve__
+       if (size) {
+               rc = ve_transfer_data_sync(uc->shm_data_vehva + mb.c.offs,
+                                          uc->mirr_data_vehva + mb.c.offs,
+                                          mb.c.len);
+               if (rc) {
+                       eprintf("[VE ERROR] ve_dma_post_wait send failed: %x\n", rc);
+                        //pthread_mutex_unlock(&uc->lock);
+                       return -EIO;
+               }
+       }
+#endif 
+       // send command
+        req = urpc_put_cmd(up, &mb);
+#else
+
 #ifdef __ve__
         // on VE: submit to async DMA handler
 	req = dhq_cmd_in(uc, &mb, 0);
@@ -444,8 +461,19 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
 #else
 	// on VH: send command
         req = urpc_put_cmd(up, &mb);
-#endif
+
+        //
+        // mlist not needed for garbage collection on VH any more
+        //
+	//mlist_t *ml = &uc->mlist[REQ2SLOT(req)];
+	//if (mb.c.len) {
+	//	ml->b.len = mb.c.len;
+	//	ml->b.offs = mb.c.offs;
+	//} else
+	//	ml->u64 = 0;
+#endif // __ve__
         
+#endif // 0
         //pthread_mutex_unlock(&uc->lock);
 	return req;
 }

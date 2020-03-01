@@ -2,8 +2,8 @@ NCC = /opt/nec/ve/bin/ncc
 NAR = /opt/nec/ve/bin/nar
 GCC = gcc
 AR = ar
-DEBUG = -g
-OPT = -O0
+#DEBUG = -g
+OPT = -O3
 GCCFLAGS = --std=c11 -pthread -D_SVID_SOURCE $(DEBUG) $(OPT)
 NCCFLAGS = -pthread $(DEBUG) $(OPT)
 

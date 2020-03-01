@@ -146,7 +146,7 @@ void ThreadContext::_progress_nolock(int ops)
  */
 void ThreadContext::progress(int ops)
 {
-  std::lock_guard<std::mutex> lock(this->prog_mtx);
+  std::lock_guard<std::recursive_mutex> lock(this->prog_mtx);
   _progress_nolock(ops);
 }
 
