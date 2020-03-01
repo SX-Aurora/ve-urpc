@@ -59,7 +59,7 @@ static inline void _rebuild_free_blocks(urpc_comm_t *uc, uint64_t last_req, int 
 	int sw = 0;	// switch roles of free blocks after allocated region goes through 0
 	int count = 0;
 
-#ifdef __ve__
+#if defined(__ve__) && !defined(SYNCDMA)
 	start = uc->dhq.in;
 	mid = uc->dhq.out;
 #else
@@ -79,8 +79,7 @@ static inline void _rebuild_free_blocks(urpc_comm_t *uc, uint64_t last_req, int 
 			on_mb = 1;
 		if (on_mb) {
 			mb.u64 = TQ_READ64(uc->tq->mb[slot].u64);
-			TQ_FENCE_L();
-			TQ_FENCE_S();
+			//TQ_FENCE_L(); TQ_FENCE_S();
 			if (mb.c.cmd == URPC_CMD_NONE) // stop search here
 				break;
 			abeg = mb.c.offs;
@@ -105,7 +104,9 @@ static inline void _rebuild_free_blocks(urpc_comm_t *uc, uint64_t last_req, int 
 		--slot;
 	} 
 	uc->active = &uc->mem[0];
+#ifdef DEBUGMEM
 	_report_free(uc, "GC: after rebuild");
+#endif
 	//
 	// do we have enough space now?
 	//
@@ -126,8 +127,10 @@ static inline void _rebuild_free_blocks(urpc_comm_t *uc, uint64_t last_req, int 
 static uint32_t _gc_buffer(urpc_comm_t *uc, int wanted)
 {
 	uint64_t last_req = TQ_READ64(uc->tq->last_put_req);
-	TQ_FENCE_L();
+	//TQ_FENCE_L();
+#ifdef DEBUGMEM
 	_report_free(uc, "GC: starting");
+#endif
 	//
 	// rebuild free_blocks by scanning through planned and active requests
 	//
@@ -150,9 +153,11 @@ uint64_t alloc_payload(urpc_comm_t *uc, uint32_t size)
 
 	res.u64 = 0;
 
+#ifdef DEBUGMEM
 	char msg[40];
 	sprintf(msg, "allocate request size=%d", size);
 	_report_free(uc, msg);
+#endif
 	while (uc->active->end - uc->active->begin < asize) {
 		uint32_t new_free = _gc_buffer(uc, asize);
 		if (new_free < asize) {
@@ -174,8 +179,10 @@ uint64_t alloc_payload(urpc_comm_t *uc, uint32_t size)
 	res.c.offs = uc->active->begin;
 	uc->active->begin += ALIGN8B(size);
 	res.c.len = size;
+#ifdef DEBUGMEM
 	sprintf(msg, "allocate done (size=%d)", size);
 	_report_free(uc, msg);
+#endif
 
 	return res.u64;
 }

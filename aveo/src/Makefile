@@ -47,11 +47,11 @@ install: $(LIBS) | $(DEST)/lib/ $(DEST)/include/ $(dir $(VEORUN_BIN))/
 .SECONDEXPANSION:
 
 $(BLIB)/libveoVE.so: $(VELIB_OBJS) | $$(@D)/
-	$(NCPP) $(NCPPFLAGS) -fpic -shared -o $@ $^ \
-		$(LDFLAGS) -lurpcVE -lveio -ldl
+	$(NCPP) -Wl,-zdefs $(NCPPFLAGS) -fpic -shared -o $@ $^ \
+		$(LDFLAGS) -lurpcVE -lveio -lveftrace -ldl
 
 $(BLIB)/libveoVH.so: $(VHLIB_OBJS) | $$(@D)/
-	$(GPP) $(GPPFLAGS) -fpic -shared -o $@ $^ \
+	$(GPP) -Wl,-zdefs $(GPPFLAGS) -fpic -shared -o $@ $^ \
 		$(LDFLAGS) -lurpcVH -llog4c -ldl
 
 $(BLIB)/libveoVE.a: $(VELIB_OBJS) | $$(@D)/
@@ -62,7 +62,8 @@ $(BLIB)/libveoVH.a: $(VHLIB_OBJS) | $$(@D)/
 
 
 $(BB)/aveorun: $(BVE)/aveorun.o | $$(@D)/
-	$(NCPP) $(NCPPFLAGS) -traceback -o $@ $^ $(LDFLAGS) -L. -lveoVE -L$(BLIB) -lurpcVE -lveio -lpthread -ldl
+	$(NCPP) $(NCPPFLAGS) -o $@ $^ $(LDFLAGS) -L. -lveoVE -L$(BLIB) -lurpcVE -lveio -lpthread
+#	$(NCPP) $(NCPPFLAGS) -traceback -o $@ $^ $(LDFLAGS) -L. -lveoVE -L$(BLIB) -lurpcVE -lveio -lpthread -ldl
 
 
 $(BVE)/veo_urpc.o: veo_urpc.cpp
@@ -81,7 +82,8 @@ $(BVE)/%.o: %.cpp | $$(@D)/
 	$(NCPP) $(NCPPFLAGS) -fpic -o $@ -c $<
 
 $(BVE)/aveorun.o: aveorun.cpp | $$(@D)/
-	$(NCPP) $(NCPPFLAGS) -traceback -fpic -o $@ -c $<
+	$(NCPP) $(NCPPFLAGS) -fpic -o $@ -c $<
+#	$(NCC) $(NCPPFLAGS) -traceback -fpic -o $@ -c $<
 
 clean:
 	rm -f $(VHLIB_OBJS) $(VELIB_OBJS) $(VELIB_OBJS_OMP) $(LIBS) $(BB)/aveorun

@@ -17,7 +17,7 @@
 
 #include "urpc_common.h"
 #include "urpc_time.h"
-
+#include "dma_handler.h"
 
 // The following variables are thread local because each Context Thread can be a peer!
 //__thread int this_peer = -1;			// local peer ID

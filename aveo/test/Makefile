@@ -30,7 +30,7 @@ install: $(TESTS) | $(DEST)/tests/
 .SECONDEXPANSION:
 
 $(BB)/%.so: %.c  | $$(@D)/
-	$(NCC) $(NCCFLAGS) -shared -fpic $(LDFLAGS) -o $@ $<
+	$(NCC) $(NCCFLAGS) -shared -fpic $(LDFLAGS) -o $@ $< -lveftrace
 
 $(BB)/%: %.c  | $$(@D)/
 	$(GCC) $(GCCFLAGS) -fpic $(LDFLAGS) -o $@ $< -L$(BLIB) -lveoVH -lurpcVH

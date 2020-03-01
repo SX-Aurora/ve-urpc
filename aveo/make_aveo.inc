@@ -9,8 +9,8 @@ OPT = -O3
 INCL = -I$(DEST)/include -I. -I../src -I../../src
 GPPFLAGS = -std=gnu++11 -pthread $(OPT) $(DEBUG) $(INCL)
 GCCFLAGS = -std=c11 -pthread  $(OPT) $(DEBUG) $(INCL)
-NCPPFLAGS = -std=gnu++11 -pthread  $(OPT) $(DEBUG) $(INCL)
-NCCFLAGS = -pthread  $(OPT) $(DEBUG) $(INCL)
+NCPPFLAGS = $(FTRACE) -std=gnu++11 -pthread  $(OPT) $(DEBUG) $(INCL) -finline -finline-functions
+NCCFLAGS = $(FTRACE) -pthread  $(OPT) $(DEBUG) $(INCL) -finline -finline-functions
 
 
 BVE = $(BUILD)/ve

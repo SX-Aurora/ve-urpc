@@ -11,7 +11,7 @@
 #include "urpc_debug.h"
 #ifdef __ve__
 #include <vedma.h>
-#include "dma_handler.h"
+//#include "dma_handler.h"
 #endif
 
 /* maximum number of peer currently limited to 80 = 8 VEs * 10 cores */
@@ -36,7 +36,7 @@
 #define DATA_BUFF_END (URPC_DATA_BUFF_LEN - 4096)
 
 /* threshold to switch from lhm/shm to user DMA */
-#define URPC_MAX_COALESCED_SIZE (512*1024)
+#define URPC_MAX_COALESCED_SIZE (120*1024)
 #define URPC_MAX_COALESCED_REQS (30)
 #define URPC_DELAY_PEEK 1
 #define URPC_TIMEOUT_US (10 * 1000000)
@@ -54,10 +54,11 @@
 # define TQ_READ32(v) ve_inst_lhm32((void *)&(v))
 # define TQ_WRITE64(var,val) ve_inst_shm((void *)&(var), val)
 # define TQ_WRITE32(var,val) ve_inst_shm32((void *)&(var), val)
-# define TQ_FENCE() do {                        \
-	ve_inst_fenceSF();			\
-	ve_inst_fenceLF();			\
-	} while(0)
+#define TQ_FENCE() ve_inst_fenceLSF()
+//# define TQ_FENCE() do {                        \
+//	ve_inst_fenceSF();			\
+//	ve_inst_fenceLF();			\
+//	} while(0)
 #define TQ_FENCE_L() ve_inst_fenceLF()
 #define TQ_FENCE_S() ve_inst_fenceSF()
 

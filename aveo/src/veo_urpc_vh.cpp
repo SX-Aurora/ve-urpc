@@ -48,8 +48,8 @@ namespace veo {
 
       dprintf("callSync: stack IN, nregs=%d, stack_top=%p, sp=%p, stack_size=%d\n",
               regs_sz/8, (void *)arg.stack_top, (void *)ve_sp, arg.stack_size);
-    } else if (arg.copied_out) {
-      // stack transfered into VE, too, even though only copy out is needed
+    } else if (arg.copied_in && arg.copied_out) {
+      // stack transfered into VE and back,
       // transfered data: addr, regs array, stack_top, stack_pointer, stack_image
 
       req = urpc_generic_send(up, URPC_CMD_CALL_STKINOUT, (char *)"LPLLP",
@@ -57,6 +57,16 @@ namespace veo {
                               arg.stack_top, ve_sp,
                               stack_buf, arg.stack_size);
       dprintf("callSync: stack INOUT, nregs=%d, stack_top=%p, sp=%p, stack_size=%d\n",
+              regs_sz/8, (void *)arg.stack_top, (void *)ve_sp, arg.stack_size);
+    } else if (!arg.copied_in && arg.copied_out) {
+      // stack transfered only back, from VE to VH
+      // transfered data: addr, regs array, stack_top, stack_pointer, stack_image
+
+      req = urpc_generic_send(up, URPC_CMD_CALL_STKOUT, (char *)"LPLLQ",
+                              addr, (void *)regs.data(), regs_sz,
+                              arg.stack_top, ve_sp,
+                              stack_buf, arg.stack_size);
+      dprintf("callSync: stack OUT, nregs=%d, stack_top=%p, sp=%p, stack_size=%d\n",
               regs_sz/8, (void *)arg.stack_top, (void *)ve_sp, arg.stack_size);
     }
     return req;
@@ -73,7 +83,7 @@ namespace veo {
       } else {
         eprintf("call result message had no payload!?");
       }
-    } else if (m->c.cmd == URPC_CMD_RESCACHE) {
+    } else if (m->c.cmd == URPC_CMD_RES_STK) {
       void *stack_buf;
       rc = urpc_unpack_payload(payload, plen, (char *)"LP", (int64_t *)result,
                                &stack_buf, &arg->stack_size);
@@ -90,7 +100,7 @@ namespace veo {
       *result = exc;
       rc = -4;
     } else {
-      eprintf("callSync: expected RESULT or RESCACHE, got cmd=%d\n", m->c.cmd);
+      eprintf("callSync: expected RESULT or RES_STK, got cmd=%d\n", m->c.cmd);
       rc = -3;
     }
   return rc;

@@ -15,7 +15,7 @@
 
 
 extern urpc_peer_t *main_up;
-
+#if 0
 void signalHandler( int signum ) {
   Dl_info di;
   
@@ -53,7 +53,7 @@ void signalHandler( int signum ) {
   ve_urpc_fini(main_up);
   exit(signum);  
 }
-
+#endif
 
 urpc_peer_t *main_up;
 
@@ -67,10 +67,12 @@ int main()
   int err;
   long ts = get_time_us();
 
+#if 0
   signal(SIGABRT, signalHandler);
   signal(SIGFPE, signalHandler);
   signal(SIGILL, signalHandler);
   signal(SIGSEGV, signalHandler);
+#endif
   
   //urpc_set_handler_init_hook(&veo_urpc_register_ve_handlers);
 
@@ -92,12 +94,16 @@ int main()
     // carefull with number of progress calls
     // number * max_send_buff_size should not be larger than what we have
     // as send buffer memory
+#ifdef SYNCDMA
+    err = ve_urpc_recv_progress(up, 3, maxinfl);
+#else
     err = ve_urpc_recv_progress(up, 10, maxinfl);
 #ifdef DEBUGMEM
     if (timediff_us(ts) > 100000) {
       dhq_state(up);
       ts = get_time_us();
     }
+#endif
 #endif
   }
 

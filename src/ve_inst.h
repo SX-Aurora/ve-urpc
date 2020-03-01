@@ -1,3 +1,6 @@
+#ifndef VE_INST_INCLUDE
+#define VE_INST_INCLUDE
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -16,6 +19,21 @@ static inline void ve_inst_fenceLF(void)
 static inline void ve_inst_fenceLSF(void)
 {
     asm volatile ("fencem 3":::);
+}
+
+static inline void ve_inst_fenceC1(void)
+{
+    asm volatile ("fencec 1":::);
+}
+
+static inline void ve_inst_fenceC2(void)
+{
+    asm volatile ("fencec 2":::);
+}
+
+static inline void ve_inst_fenceC4(void)
+{
+    asm volatile ("fencec 4":::);
 }
 
 static inline void ve_inst_fenceC7(void)
@@ -51,3 +69,5 @@ static inline void ve_inst_shm32(void *vehva, uint32_t value)
 #ifdef __cplusplus
 }
 #endif
+
+#endif // VE_INST_INCLUDE

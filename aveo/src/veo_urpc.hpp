@@ -28,8 +28,8 @@ enum veo_urpc_cmd
 	URPC_CMD_PING          =  1,
 	URPC_CMD_EXIT          =  2,
 	URPC_CMD_ACK           =  3, // ACK is a result with no (void) content
-	URPC_CMD_RESULT        =  4, // result (int64_t) without cache
-	URPC_CMD_RESCACHE      =  5, // result with cache
+	URPC_CMD_RESULT        =  4, // result (int64_t) without stack frame
+	URPC_CMD_RES_STK       =  5, // result with stack frame
         URPC_CMD_EXCEPTION     =  6, // notify about exception
 	URPC_CMD_LOADLIB       =  7, // load .so
 	URPC_CMD_UNLOADLIB     =  8, // unload .so
@@ -38,39 +38,14 @@ enum veo_urpc_cmd
 	URPC_CMD_FREE          = 11, // free buffer on VE
 	URPC_CMD_SENDBUFF      = 12, 
 	URPC_CMD_RECVBUFF      = 13,
-	URPC_CMD_CALL          = 15, // simple call with no stack transfer
-	URPC_CMD_CALL_STKIN    = 16, // call with stack "IN" only
+	URPC_CMD_CALL          = 14, // simple call with no stack transfer
+	URPC_CMD_CALL_STKIN    = 15, // call with stack "IN" only
+	URPC_CMD_CALL_STKOUT   = 16, // call with stack "OUT" only
 	URPC_CMD_CALL_STKINOUT = 17, // call with stack IN and OUT
 	URPC_CMD_SLEEPING      = 18, // notify peer that we're going to sleep
 	URPC_CMD_NEWPEER       = 19  // create new remote peer (AKA context) inside same proc
 };
 
-enum veo_urpc_call_flags
-{
-	VEO_CALL_NO_STK  = 0,
-	VEO_CALL_STK_IN  = 1,
-	VEO_CALL_STK_OUT = 2
-};
-
-static inline int pickup_acks(urpc_peer_t *up, int acks)
-{
-	transfer_queue_t *tq = up->recv.tq;
-	urpc_mb_t m;
-
-	for (int i = 0; i < acks; i++) {
-		int64_t req = urpc_get_cmd_timeout(tq, &m, REPLY_TIMEOUT);
-		//int64_t req = urpc_get_cmd(tq, &m);
-		if (req < 0) {
-			eprintf("missing ACKs, expected %d, got %d\n", acks, i);
-			return -1;
-		}
-		// mark slot as done, this is not handled by the receive loop
-		urpc_slot_done(tq, REQ2SLOT(req), &m);
-	}
-	return 0;
-}
-
- 
 #ifndef __ve__
 int64_t send_call_nolock(urpc_peer_t *up, uint64_t ve_sp, uint64_t addr,
                          CallArgs &arg);

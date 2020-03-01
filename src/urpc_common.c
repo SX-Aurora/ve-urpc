@@ -5,6 +5,7 @@
 #include "urpc_time.h"
 #ifdef __ve__
 #include <vedma.h>
+#include "dma_handler.h"
 #else
 #include "vh_shm.h"
 #endif
@@ -326,6 +327,12 @@ int urpc_unregister_handler(urpc_peer_t *up, int cmd)
   'P' : a buffer pointer, expects a "void *" and a "size_t" for the buffer size.
         The buffer size is packed as uint64_t into the payload and is followed by
         the buffer content.
+  'Q' : a buffer pointer, expects a "void *" and a "size_t" for the buffer size.
+        The buffer is allocated in the urpc_comm but no content is transfered.
+        This type is used for STKOUT calls.
+        The buffer size is packed as uint64_t into the payload. The allocated
+        space is not used by other transfers until the current req is marked done.
+        This argument must be the last one in the list and show up only once!
   64 bit values and the buffer should better start at an 8 byte boundary, so use
   padding in the fmt string to achieve that. The payload length will also be
   filled to the next 8 byte boundary, such that the next payload is again 8b aligned.
@@ -364,6 +371,12 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
 			dummy64 = va_arg(ap1, uint64_t);
 			break;
 		case 'P': // 64 bit value
+			size += 8;
+			dummyp = va_arg(ap1, void *);
+			dummys = va_arg(ap1, size_t);
+			size += dummys;
+			break;
+		case 'Q': // 64 bit value
 			size += 8;
 			dummyp = va_arg(ap1, void *);
 			dummys = va_arg(ap1, size_t);
@@ -419,6 +432,12 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
 					memcpy((void *)pp, dummyp, (size_t)dummys);
 				pp += dummys;
 				break;
+			case 'Q': // 64 bit value
+				dummyp = va_arg(ap2, void *);
+				dummys = va_arg(ap2, size_t);
+				*((uint64_t *)pp) = dummys;
+				pp += 8;
+				break;
 			case 'x': // 32 bit padding
 				pp += 4;
 				break;
@@ -437,7 +456,7 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
        if (size) {
                rc = ve_transfer_data_sync(uc->shm_data_vehva + mb.c.offs,
                                           uc->mirr_data_vehva + mb.c.offs,
-                                          mb.c.len);
+                                          (size_t)(pp - payload));
                if (rc) {
                        eprintf("[VE ERROR] ve_dma_post_wait send failed: %x\n", rc);
                         //pthread_mutex_unlock(&uc->lock);
@@ -494,6 +513,12 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
   'P' : a buffer pointer, expects a "void *" and a "size_t" for the buffer size.
         The buffer size is packed as uint64_t into the payload and is followed by
         the buffer content.
+  'Q' : a buffer pointer, expects a "void *" and a "size_t" for the buffer size.
+        The buffer is allocated in the urpc_comm but no content is transfered.
+        This type is used for STKOUT calls.
+        The buffer size is packed as uint64_t into the payload. The allocated
+        space is not used by other transfers until the current req is marked done.
+        This argument must be the last one in the list and show up only once!
   64 bit values and the buffer should better start at an 8 byte boundary, so use
   padding in the fmt string to achieve that. The payload length will also be
   filled to the next 8 byte boundary, such that the next payload is again 8b aligned.
@@ -539,6 +564,16 @@ int urpc_unpack_payload(void *payload, size_t psz, char *fmt, ...)
 			pp += *dummys;
                         lsz -= *dummys;
 			break;
+		case 'Q': // 64 bit value
+			dummyp = va_arg(ap, void **);
+			dummys = va_arg(ap, size_t *);
+			*dummys = (size_t) *((uint64_t *)pp);
+			pp += 8;
+                        lsz -= 8;
+			*dummyp = (void *)pp;
+			pp += *dummys;
+                        lsz -= *dummys;
+			break;
 		case 'x': // 32 bit padding
 			pp += 4;
                         lsz -= 4;
@@ -551,9 +586,5 @@ int urpc_unpack_payload(void *payload, size_t psz, char *fmt, ...)
 	if (lsz < 0)
 		rc = -1;
 	va_end(ap);
-#ifdef __ve__
-        ve_inst_fenceLF();
-        ve_inst_fenceSF();
-#endif
 	return rc;
 }

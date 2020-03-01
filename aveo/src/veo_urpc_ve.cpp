@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <dlfcn.h>
 
-#include <CallArgs.hpp>
 #include "veo_urpc.hpp"
 
 #ifdef __cplusplus
@@ -41,14 +40,13 @@ static int call_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
   uint64_t addr = 0;
   uint64_t *regs, result;
   size_t nregs;
-  int flags;
+  int cmd = m->c.cmd;
 
   asm volatile ("or %0, 0, %sp": "=r"(curr_sp));
 
   dprintf("call_handler cmd=%d\n", m->c.cmd);
   
-  if (m->c.cmd == URPC_CMD_CALL) {
-    flags = 0;
+  if (cmd == URPC_CMD_CALL) {
     urpc_unpack_payload(payload, plen, (char *)"LP", &addr, (void **)&regs, &nregs);
     nregs = nregs / 8;
     dprintf("call_handler CALL nregs=%d\n", nregs);
@@ -68,19 +66,24 @@ static int call_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
     }
     dprintf("call_handler: no stack, nregs=%d\n", nregs);
 
-  } else if (m->c.cmd == URPC_CMD_CALL_STKINOUT) {
-    flags |= VEO_CALL_STK_OUT | VEO_CALL_STK_IN;
-  } else if (m->c.cmd == URPC_CMD_CALL_STKIN) {
-    flags |= VEO_CALL_STK_IN;
-  }
-  if (flags & VEO_CALL_STK_IN) {
+  } else if (cmd == URPC_CMD_CALL_STKIN ||
+             cmd == URPC_CMD_CALL_STKINOUT) {
+
     urpc_unpack_payload(payload, plen, (char *)"LPLLP",
                         &addr, (void **)&regs, &nregs,
                         &stack_top, &recv_sp,
                         &stack, &stack_size);
     nregs = nregs / 8;
-    dprintf("call_handler: stack IN, nregs=%d, stack_top=%p\n",
+    dprintf("call_handler: stack IN or INOUT, nregs=%d, stack_top=%p\n",
             nregs, (void *)stack_top);
+  } else if (cmd == URPC_CMD_CALL_STKOUT) {
+    urpc_unpack_payload(payload, plen, (char *)"LPLLQ",
+                        &addr, (void **)&regs, &nregs,
+                        &stack_top, &recv_sp,
+                        &stack, &stack_size);
+    nregs = nregs / 8;
+    dprintf("call_handler: stack OUT, nregs=%d, stack_top=%p, stack_size=%lu\n",
+            nregs, (void *)stack_top, stack_size);
   }
   //
   // check if sent stack pointer is the same as the current one
@@ -97,7 +100,8 @@ static int call_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
   // parameters and variables that look like local variables on this
   // function's stack.
   //
-  if (flags & VEO_CALL_STK_IN) {
+  if (cmd == URPC_CMD_CALL_STKIN ||
+      cmd == URPC_CMD_CALL_STKINOUT) {
     memcpy((void *)stack_top, stack, stack_size);
   }
   //
@@ -129,11 +133,11 @@ static int call_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
   //
   // And now we call the function!
   //
-  if (flags == 0) {
+  if (cmd == URPC_CMD_CALL) {
     asm volatile("or %s12, 0, %0\n\t"          /* target function address */
                  ::"r"(addr));
     asm volatile("bsic %lr, (,%s12)":::);
-  } else if (flags & VEO_CALL_STK_OUT) {
+  } else {
     asm volatile("or %s12, 0, %0\n\t"          /* target function address */
                  "st %fp, 0x0(,%sp)\n\t"       /* save original fp */
                  "st %lr, 0x8(,%sp)\n\t"       /* fake prologue */
@@ -149,20 +153,21 @@ static int call_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
   }
   asm volatile("or %0, 0, %s0":"=r"(result));
 
-  if (flags & VEO_CALL_STK_OUT) {
+  if (cmd == URPC_CMD_CALL_STKOUT ||
+      cmd == URPC_CMD_CALL_STKINOUT) {
     // copying back from stack must happen in the same function,
-    // otherwise we overwrite it!
+    // otherwise we overwrite it! So we simply use a loop.
 #pragma _NEC ivdep
     for (int i = 0; i < stack_size / 8; i++) {
       ((uint64_t *)stack)[i] = ((uint64_t *)stack_top)[i];
     }
-    dprintf("call_handler sending RESCACHE\n");
-    int64_t new_req = urpc_generic_send(up, URPC_CMD_RESCACHE, (char *)"LP",
+    dprintf("call_handler sending RES_STK\n");
+    int64_t new_req = urpc_generic_send(up, URPC_CMD_RES_STK, (char *)"LP",
                                         result, stack, stack_size);
     if (new_req != req || new_req < 0) {
-      eprintf("call_handler send RESCACHE failed, req mismatch. Expected %ld got %ld\n",
+      eprintf("call_handler send RES_STK failed, req mismatch. Expected %ld got %ld\n",
               req, new_req);
-      print_dhq_state(up);
+      //print_dhq_state(up);
       return -1;
     }
   } else {
@@ -171,7 +176,7 @@ static int call_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
     if (new_req != req || new_req < 0) {
       eprintf("call_handler: send RESULT failed. Expected %ld got %ld\n",
               req, new_req);
-      print_dhq_state(up);
+      //print_dhq_state(up);
       return -1;
     }
   }
@@ -185,6 +190,8 @@ void veo_urpc_register_ve_handlers(urpc_peer_t *up)
   if ((err = urpc_register_handler(up, URPC_CMD_CALL, &call_handler)) < 0)
     eprintf("register_handler failed for cmd %d\n", 1);
   if ((err = urpc_register_handler(up, URPC_CMD_CALL_STKIN, &call_handler)) < 0)
+    eprintf("register_handler failed for cmd %d\n", 1);
+  if ((err = urpc_register_handler(up, URPC_CMD_CALL_STKOUT, &call_handler)) < 0)
     eprintf("register_handler failed for cmd %d\n", 1);
   if ((err = urpc_register_handler(up, URPC_CMD_CALL_STKINOUT, &call_handler)) < 0)
     eprintf("register_handler failed for cmd %d\n", 1);

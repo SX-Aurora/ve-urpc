@@ -6,11 +6,16 @@
 #include <ve_offload.h>
 #include "urpc_time.h"
 
+int nloop = 10000;
+
 int main(int argc, char *argv[])
 {
 	int err = 0;
-
         struct veo_proc_handle *proc;
+
+	if (argc > 1) {
+		nloop = atoi(argv[1]);
+	}
 
         proc = veo_proc_create(-1);
         printf("proc = %p\n", (void *)proc);
@@ -43,7 +48,6 @@ int main(int argc, char *argv[])
 
         veo_args_clear(argp);
         long ts, te;
-        const int nloop = 10000;
         uint64_t reqs[nloop], res[nloop];
 
         ts = get_time_us();

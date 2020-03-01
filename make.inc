@@ -3,9 +3,9 @@ NAR = /opt/nec/ve/bin/nar
 GCC = gcc
 AR = ar
 #DEBUG = -g
-OPT = -O3
+OPT = -O3 -DSYNCDMA
 GCCFLAGS = --std=c11 -pthread -D_SVID_SOURCE $(DEBUG) $(OPT)
-NCCFLAGS = -pthread $(DEBUG) $(OPT)
+NCCFLAGS = $(FTRACE) -pthread $(DEBUG) $(OPT) -finline -finline-functions
 
 
 BVE = $(BUILD)/ve
