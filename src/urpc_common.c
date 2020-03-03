@@ -4,8 +4,7 @@
 #include "ve_inst.h"
 #include "urpc_time.h"
 #ifdef __ve__
-#include <vedma.h>
-#include "dma_handler.h"
+//#include <vedma.h>
 #else
 #include "vh_shm.h"
 #endif
@@ -224,7 +223,6 @@ int set_recv_payload(urpc_comm_t *uc, urpc_mb_t *m, void **payload, size_t *plen
 #ifdef __ve__
 		*payload = (void *)((char *)uc->mirr_data_buff + m->c.offs);
 		*plen = m->c.len;
-#ifdef SYNCDMA
 		if (*plen <= 16) {
 			int aoffs = m->c.offs >> 3;  // divide by 8
 			for (int i = 0; i < *plen >> 3; i++) {
@@ -236,15 +234,15 @@ int set_recv_payload(urpc_comm_t *uc, urpc_mb_t *m, void **payload, size_t *plen
 			//
 			// do the DMA transfer synchronously
 			//
-			err = ve_dma_post_wait(uc->mirr_data_vehva + m->c.offs, // dst
-					       uc->shm_data_vehva + m->c.offs,  // src
-					       *plen);
+			err = ve_transfer_data_sync(uc->mirr_data_vehva + m->c.offs, // dst
+                                                    uc->shm_data_vehva + m->c.offs,  // src
+                                                    *plen);
 			if (err) {
 				eprintf("[VE ERROR] ve_dma_post_wait failed: %x\n", err);
+                                
 				return -EIO;
 			}
 		}
-#endif
 #else
 		*payload = (void *)((char *)&tq->data[0] + m->c.offs);
 		*plen = m->c.len;
@@ -451,7 +449,6 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
 	va_end(ap2);
 	mb.c.cmd = cmd;
 
-#ifdef SYNCDMA
 #ifdef __ve__
        if (size) {
                rc = ve_transfer_data_sync(uc->shm_data_vehva + mb.c.offs,
@@ -466,34 +463,6 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
 #endif 
        // send command
         req = urpc_put_cmd(up, &mb);
-#else
-
-#ifdef __ve__
-        // on VE: submit to async DMA handler
-	req = dhq_cmd_in(uc, &mb, 0);
-	mlist_t *ml = &uc->mlist[REQ2SLOT(req)];
-	if (mb.c.len) {
-		ml->b.len = mb.c.len;
-		ml->b.offs = mb.c.offs;
-	} else
-		ml->u64 = 0;
-#else
-	// on VH: send command
-        req = urpc_put_cmd(up, &mb);
-
-        //
-        // mlist not needed for garbage collection on VH any more
-        //
-	//mlist_t *ml = &uc->mlist[REQ2SLOT(req)];
-	//if (mb.c.len) {
-	//	ml->b.len = mb.c.len;
-	//	ml->b.offs = mb.c.offs;
-	//} else
-	//	ml->u64 = 0;
-#endif // __ve__
-        
-#endif // 0
-        //pthread_mutex_unlock(&uc->lock);
 	return req;
 }
 

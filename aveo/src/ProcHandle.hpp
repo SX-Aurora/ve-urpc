@@ -36,10 +36,10 @@ private:
   std::unordered_map<std::pair<uint64_t, std::string>, uint64_t> sym_name;
   std::mutex sym_mtx;
   std::mutex main_mutex;		//!< acquire when opening a new context
-  std::vector<ThreadContext *> ctx;	//!< vector of opened contexts
   urpc_peer_t *up;			//!< ve-urpc peer pointer
   uint64_t ve_sp;       		//!< stack pointer on VE side
-  ThreadContext *main_ctx;		//!< context also used for sync proc ops
+  ThreadContext *mctx;			//!< context also used for sync proc ops
+  std::vector<std::unique_ptr<ThreadContext>> ctx;	//!< vector of opened contexts
   int ve_number;			//!< store the VE number
 
 public:
@@ -56,11 +56,15 @@ public:
   int writeMem(uint64_t, const void *, size_t);
   int exitProc(void);
 
+  int numContexts(void);
+  ThreadContext *getContext(int);
+
   int callSync(uint64_t, CallArgs &, uint64_t *);
 
-  ThreadContext *mainContext() { return this->main_ctx; };
+  ThreadContext *mainContext() { return this->mctx; };
   ThreadContext *openContext();
-  
+  void delContext(ThreadContext *);
+
   veo_proc_handle *toCHandle() {
     return reinterpret_cast<veo_proc_handle *>(this);
   }

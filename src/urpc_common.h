@@ -14,8 +14,9 @@
 //#include "dma_handler.h"
 #endif
 
+#define MAX_VE_CORES   8
 /* maximum number of peer currently limited to 80 = 8 VEs * 10 cores */
-#define URPC_MAX_PEERS 80
+#define URPC_MAX_PEERS (8 * MAX_VE_CORES)
 /* the length of the mailbox MUST be a power of 2! */
 #define URPC_LEN_MB    256
 #define URPC_BUFF_LEN (64 * 1024 * 1024)
@@ -161,20 +162,6 @@ union mlist {
 };
 typedef union mlist mlist_t;
 
-#ifdef __ve__
-struct dma_handler {
-	int in;		//!< slot of last cmd inserted
-	int submit;	//!< slot of last cmd submitted to DMA
-	int done;	//!< slot of last cmd who's DMA is finished
-	int out;	//!< slot of last cmd that was processed by handler
-	int64_t in_req;			//!< URPC req number of 'in' cmd
-	urpc_mb_t cmd[URPC_LEN_MB];
-	ve_dma_handle_t handle[URPC_LEN_MB];
-	int8_t coalesced[URPC_LEN_MB];	//!< value is true if slot transfer is coalesced
-};
-typedef struct dma_handler dma_handler_t;
-#endif
-
 struct free_block {
 	uint32_t begin;	// offset of beginning of free block
 	uint32_t end;	// offset of end of free block
@@ -190,7 +177,6 @@ struct urpc_comm {
 	free_block_t mem[2];	// free memory blocks
 	transfer_queue_t *tq;	// communication buffer in shared memory segment
 #ifdef __ve__
-	dma_handler_t dhq;		// handles async DMA transfers
 	uint64_t shm_data_vehva;	// start of payload buffer space in shm segment vehva
 	uint64_t mirr_data_vehva;	// VEHVA address of VE mirror buffer to payload buffer
 	void *mirr_data_buff;		// virtual address of VE mirror buffer
@@ -221,6 +207,7 @@ struct urpc_peer {
 	void *shm_addr;
 #ifdef __ve__
 	uint64_t shm_vehva;
+	int core;
 #endif
 	int shm_destroyed;
 	pthread_mutex_t lock;
@@ -230,12 +217,13 @@ struct urpc_peer {
 
 #ifdef __ve__
 
-urpc_peer_t *ve_urpc_init(int segid, int core);
+urpc_peer_t *ve_urpc_init(int segid);
+int ve_urpc_init_dma(urpc_peer_t *up, int core);
+void ve_urpc_unpin(void);
 void ve_urpc_fini(urpc_peer_t *up);
 int ve_transfer_data_sync(uint64_t dst_vehva, uint64_t src_vehva, int len);
-int ve_urpc_recv_progress(urpc_peer_t *up, int ncmds, int maxinflight);
-int ve_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, int maxinflight, long timeout_us);
-void dhq_state(urpc_peer_t *up);
+int ve_urpc_recv_progress(urpc_peer_t *up, int ncmds);
+int ve_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us);
 
 #else
 

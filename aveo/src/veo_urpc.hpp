@@ -9,6 +9,7 @@ using veo::CallArgs;
 #else
 #include "ve_inst.h"
 #endif
+#include "urpc_time.h"
 
 // reply timeout in us
 #define REPLY_TIMEOUT 2000000
@@ -16,6 +17,32 @@ using veo::CallArgs;
 // multipart SEND/RECVFRAG transfer size
 //#define PART_SENDFRAG ALIGN8B(URPC_DATA_BUFF_LEN >> 3)
 #define PART_SENDFRAG (6*1024*1024)
+
+extern "C" {
+
+  extern __thread int __veo_finish;
+
+  void veo_urpc_register_handlers(urpc_peer_t *up);
+
+#ifdef __ve__
+
+  extern pthread_t __handler_loop_pthreads[MAX_VE_CORES];
+  extern int __num_ve_peers;
+  
+  typedef struct {
+    urpc_peer_t *up;
+    int core;
+  } ve_handler_loop_arg_t;
+
+  void veo_urpc_register_ve_handlers(urpc_peer_t *up);
+  void *ve_handler_loop(void *arg);
+
+#else
+
+  void veo_urpc_register_vh_handlers(urpc_peer_t *up);
+
+#endif
+}
 
 namespace veo {
 
@@ -57,13 +84,5 @@ int wait_req_ack(urpc_peer_t *up, int64_t req);
 
 } // namespace veo
 
-extern "C" {
-  void veo_urpc_register_handlers(urpc_peer_t *up);
-#ifdef __ve__
-  void veo_urpc_register_ve_handlers(urpc_peer_t *up);
-#else
-  void veo_urpc_register_vh_handlers(urpc_peer_t *up);
-#endif
-}
 
 #endif /* VEO_URPC_INCLUDE */

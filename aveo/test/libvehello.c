@@ -23,3 +23,10 @@ uint64_t empty(void)
   empty_cnt++;
   return empty_cnt;
 }
+
+uint64_t empty_cnt2 = 0;
+uint64_t empty2(void)
+{
+  empty_cnt2++;
+  return empty_cnt2;
+}

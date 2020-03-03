@@ -17,7 +17,7 @@
 
 #include "urpc_common.h"
 #include "urpc_time.h"
-#include "dma_handler.h"
+
 
 // The following variables are thread local because each Context Thread can be a peer!
 //__thread int this_peer = -1;			// local peer ID
@@ -51,6 +51,14 @@ static int vhshm_register(urpc_peer_t *up)
 	return 0;
 }
 
+/**
+ * @brief Pin the thread to a core. In case of OpenMP: pin all threads to consecutive cores.
+ *
+ * The VE side process must be pinned to a core because it is not allowed to change the core
+ * and the DMA descriptor set.
+ *
+ * @param core the core of the main thread or thread #0 (for OpenMP)
+ */
 static void _pin_threads_to_cores(int core)
 {
 #ifdef _OPENMP
@@ -70,6 +78,34 @@ static void _pin_threads_to_cores(int core)
 #endif
 }
 
+/**
+ * @brief Unpin the thread(s).
+ *
+ * This function is needed when spawning a new pthread inside a VE handler (NEWPEER).
+ * Without unpinning the new pthread inherits the parent's mask and is scheduled on
+ * the same core, competing with the parent.
+ *
+ */
+void ve_urpc_unpin(void)
+{
+	uint64_t mask = (1 << MAX_VE_CORES) - 1;
+#ifdef _OPENMP
+#pragma omp parallel
+	{
+		int thr = omp_get_thread_num();
+		cpu_set_t set;
+		memset(&set, 0, sizeof(cpu_set_t));
+		set.__bits[0] = mask;
+		pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &set);
+	}
+#else
+	cpu_set_t set;
+	memset(&set, 0, sizeof(cpu_set_t));
+        set.__bits[0] = mask;
+	pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &set);
+#endif
+}
+
 static void ve_urpc_comm_init(urpc_comm_t *uc)
 {
 	uc->mem[0].begin = 0;
@@ -81,7 +117,7 @@ static void ve_urpc_comm_init(urpc_comm_t *uc)
 }
 
 // TODO: add pinning to a VE core!
-urpc_peer_t *ve_urpc_init(int segid, int core)
+urpc_peer_t *ve_urpc_init(int segid)
 {
 	int err = 0;
 	char *e;
@@ -124,22 +160,7 @@ urpc_peer_t *ve_urpc_init(int segid, int core)
 		+ offsetof(transfer_queue_t, data);
 
 	ve_urpc_comm_init(&up->send);
-        init_dma_handler(&up->send);
-        init_dma_handler(&up->recv);
 
-	// pinning to VE core must happen before initializing UDMA
-	if (core < 0 && (e = getenv("URPC_VE_CORE")) != NULL) {
-		core = atoi(e);
-	}
-	if (core >= 0)
-		_pin_threads_to_cores(core);
-
-	// Initialize DMA
-	err = ve_dma_init();
-	if (err) {
-		eprintf("Failed to initialize DMA\n");
-		return NULL;
-	}
 	char *buff_base;
 	uint64_t buff_base_vehva;
 	size_t align_64mb = 64 * 1024 * 1024;
@@ -177,7 +198,33 @@ urpc_peer_t *ve_urpc_init(int segid, int core)
 		up->handler[i] = NULL;
         urpc_run_handler_init_hooks(up);
 
+	// don't remove this
+	up->core = -1;
 	return up;
+}
+
+/**
+ * We need this split iof init because VE-SHM functions can only be done in the main thread.
+ */
+int ve_urpc_init_dma(urpc_peer_t *up, int core)
+{
+	char *e;
+
+	// pinning to VE core must happen before initializing UDMA
+	if (core < 0 && (e = getenv("URPC_VE_CORE")) != NULL) {
+		core = atoi(e);
+	}
+	if (core >= 0)
+		_pin_threads_to_cores(core);
+	up->core = core;
+
+	// Initialize DMA
+	int err = ve_dma_init();
+	if (err) {
+		eprintf("Failed to initialize DMA\n");
+		return -1;
+	}
+	return 0;
 }
 
 void ve_urpc_fini(urpc_peer_t *up)
@@ -214,6 +261,24 @@ int ve_transfer_data_sync(uint64_t dst_vehva, uint64_t src_vehva, int len)
        int err;
 
        err = ve_dma_post_wait(dst_vehva, src_vehva, len);
+       if (err) {
+	       pid_t pid = getpid();
+	       eprintf("DMA encountered exception, rc=0x%x\n", err);
+	       if (err & 0x8000) {
+		       eprintf("memory protection exception\n");
+	       } else if (err & 0x4000) {
+		       eprintf("memory protection exception\n");
+	       } else if (err & 0x2000) {
+		       eprintf("missing space exception\n");
+	       } else if (err & 0x1000) {
+		       eprintf("memory access exception\n");
+	       } else if (err & 0x0800) {
+		       eprintf("I/O access exception\n");
+	       }
+	       eprintf("Sleeping for 40s such that you can attach a debugger.\n");
+	       eprintf("Command:  /opt/nec/ve/bin/gdb -p %d\n", pid);
+	       sleep(40);
+       }
        return err;
 }
 
@@ -223,14 +288,12 @@ int ve_transfer_data_sync(uint64_t dst_vehva, uint64_t src_vehva, int len)
   Process at most 'ncmds' requests from the RECV communicator.
   Return number of requests processed, -1 if error
 */
-int ve_urpc_recv_progress(urpc_peer_t *up, int ncmds, int maxinflight)
+int ve_urpc_recv_progress(urpc_peer_t *up, int ncmds)
 {
 	int64_t req, dhq_req;
 	int done = 0;
 	urpc_mb_t m;
-	int inflight;
 
-#ifdef SYNCDMA
 	urpc_comm_t *uc = &up->recv;
 	transfer_queue_t *tq = uc->tq;
         urpc_handler_func func = NULL;
@@ -259,49 +322,17 @@ int ve_urpc_recv_progress(urpc_peer_t *up, int ncmds, int maxinflight)
 		urpc_slot_done(tq, REQ2SLOT(req), &m);
 		++done;
 	}
-#else
-	do {
-		done = 0;
-		inflight = MAX(dhq_in_flight(&up->recv), dhq_in_flight(&up->send));
-		// recv part
-		if (inflight < maxinflight) {
-			for (int i = 0; i < maxinflight - inflight; i++) {
-				req = urpc_get_cmd(up->recv.tq, &m);
-				if (req < 0)
-					break;
-				dhq_req = dhq_cmd_in(&up->recv, &m, 1);
-				if (dhq_req != req) {
-					eprintf("call_handler sp send failed, req mismatch.\n");
-					return -1;
-				}
-				done++;
-			}
-		}
-		inflight = MAX(dhq_in_flight(&up->recv), dhq_in_flight(&up->send));
-		done += dhq_dma_submit(&up->recv, 1);
-		done += dhq_cmd_check_done(&up->recv, 1);
-                done += dhq_cmd_handle(up, 1);
-		// send part
-		done += dhq_dma_submit(&up->send, 0);
-		done += dhq_cmd_check_done(&up->send, 0);
-		done += dhq_cmd_handle(up, 0);
-#ifdef DEBUGMEM
-                if (done)
-			dhq_state(up);
-#endif
-	} while (done > 0);
-#endif // SYNCDMA
 	return done;
 }
 
 /*
   Progress loop with timeout.
 */
-int ve_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, int maxinflight, long timeout_us)
+int ve_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us)
 {
 	long done_ts = 0;
 	do {
-		int done = ve_urpc_recv_progress(up, ncmds, maxinflight);
+		int done = ve_urpc_recv_progress(up, ncmds);
 		if (done == 0) {
 			if (done_ts == 0)
 				done_ts = get_time_us();
@@ -309,20 +340,5 @@ int ve_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, int maxinflight, l
 			done_ts = 0;
 
 	} while (done_ts == 0 || timediff_us(done_ts) < timeout_us);
-
-}
-
-void dhq_state(struct urpc_peer *up)
-{
-	dma_handler_t *dh;
-
-	dh = &up->recv.dhq;
-	printf("#########################################################\n");
-	printf("# DHQ recv: req=%4ld in=%3d submit=%3d done=%3d out=%3d #\n",
-	       dh->in_req, dh->in, dh->submit, dh->done, dh->out);
-	dh = &up->send.dhq;
-	printf("# DHQ send: req=%4ld in=%3d submit=%3d done=%3d out=%3d #\n",
-	       dh->in_req, dh->in, dh->submit, dh->done, dh->out);
-	printf("#########################################################\n");
 }
 

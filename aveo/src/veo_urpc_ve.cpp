@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <dlfcn.h>
+#include <pthread.h>
 
 #include "veo_urpc.hpp"
 
@@ -9,27 +11,73 @@
 extern "C" {
 #endif
 
+extern __thread int __veo_finish;
+pthread_t __handler_loop_pthreads[MAX_VE_CORES];
+int __num_ve_peers = 0;
+
 using namespace veo;
+
+//
+// VE side main handler loop
+//
+void *ve_handler_loop(void *arg)
+{
+  ve_handler_loop_arg_t *a = (ve_handler_loop_arg_t *)arg;
+
+  urpc_peer_t *up = a->up;
+  int rc = ve_urpc_init_dma(up, a->core);
+
+  urpc_set_receiver_flags(&up->recv, 1);
+
+  __veo_finish = 0;
+  while (!__veo_finish) {
+    // carefull with number of progress calls
+    // number * max_send_buff_size should not be larger than what we have
+    // as send buffer memory
+    ve_urpc_recv_progress(up, 3);
+  }
+  ve_urpc_fini(up);
+  return NULL;
+}
 
 //
 // Handlers
 //
 
-static void print_dhq_state(urpc_peer_t *up)
+static int newpeer_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
+                           void *payload, size_t plen)
 {
-  dma_handler_t *dh = &up->recv.dhq;
-  printf("dhq recv: in_req=%ld in=%d submit=%d done=%d out=%d\n",
-         dh->in_req, dh->in, dh->submit, dh->done, dh->out);
-  int64_t last_put = TQ_READ64(up->recv.tq->last_put_req);
-  int64_t last_get = TQ_READ64(up->recv.tq->last_get_req);
-  printf("recv last_put=%ld last_get=%ld\n", last_put, last_get);
-  dh = &up->send.dhq;
-  printf("dhq send: in_req=%ld in=%d submit=%d done=%d out=%d\n",
-         dh->in_req, dh->in, dh->submit, dh->done, dh->out);
-  last_put = TQ_READ64(up->send.tq->last_put_req);
-  last_get = TQ_READ64(up->send.tq->last_get_req);
-  printf("send last_put=%ld last_get=%ld\n", last_put, last_get);
+  int segid, core;
+  urpc_peer_t *new_up;
+
+  urpc_unpack_payload(payload, plen, (char *)"II", &segid, &core);
+  new_up = ve_urpc_init(segid);
+
+  ve_handler_loop_arg_t arg = { .up = new_up, .core = core };
+
+  ve_urpc_unpin();
+  
+  // start new pthread
+  int rc = pthread_create(&__handler_loop_pthreads[__num_ve_peers], NULL, ve_handler_loop, (void *)&arg);
+  if (rc) {
+    eprintf("NEWPEER handler failed with rc=%d\n", rc);
+    return -1;
+  }
+  __num_ve_peers++;
+  while (new_up->core != core);
+
+  ve_urpc_init_dma(up, up->core);
+  
+  int new_req = urpc_generic_send(up, URPC_CMD_RESULT, (char *)"L", (int64_t)rc);
+  // check req IDs. Result expected with exactly same req ID.
+  if (new_req != req) {
+    eprintf("newpeer_handler: send result req ID mismatch: %ld instead of %ld\n",
+            new_req, req);
+    return -1;
+  }
+  return rc;
 }
+
 
 static int call_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
                         void *payload, size_t plen)
@@ -187,6 +235,8 @@ void veo_urpc_register_ve_handlers(urpc_peer_t *up)
 {
   int err;
 
+  if ((err = urpc_register_handler(up, URPC_CMD_NEWPEER, &newpeer_handler)) < 0)
+    eprintf("register_handler failed for cmd %d\n", 1);
   if ((err = urpc_register_handler(up, URPC_CMD_CALL, &call_handler)) < 0)
     eprintf("register_handler failed for cmd %d\n", 1);
   if ((err = urpc_register_handler(up, URPC_CMD_CALL_STKIN, &call_handler)) < 0)

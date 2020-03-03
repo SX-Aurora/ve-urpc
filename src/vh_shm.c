@@ -78,7 +78,7 @@ int vh_shm_wait_peers(int segid)
 		}
 		if (ds.shm_nattch == 2)
 			break;
-                if (timediff_us(ts) > 5000000) {
+                if (timediff_us(ts) > 50000000) {
 			rc = -1;
 			perror("vh_shm_wait_peers] Timeout while waiting for peer.");
 			break;

@@ -13,9 +13,8 @@
 //#define _GNU_SOURCE
 #include <dlfcn.h>
 
-
 extern urpc_peer_t *main_up;
-#if 0
+
 void signalHandler( int signum ) {
   Dl_info di;
   
@@ -53,60 +52,33 @@ void signalHandler( int signum ) {
   ve_urpc_fini(main_up);
   exit(signum);  
 }
-#endif
 
 urpc_peer_t *main_up;
 
-extern "C" {
-  extern int veo_finish_;
-  //extern void veo_urpc_register_ve_handlers(urpc_peer_t *);
-}
 
 int main()
 {
   int err;
   long ts = get_time_us();
 
-#if 0
   signal(SIGABRT, signalHandler);
   signal(SIGFPE, signalHandler);
   signal(SIGILL, signalHandler);
   signal(SIGSEGV, signalHandler);
-#endif
+
+  main_up = ve_urpc_init(0);
   
-  //urpc_set_handler_init_hook(&veo_urpc_register_ve_handlers);
+  ve_handler_loop_arg_t arg = { .up = main_up,
+                                .core = 0 };
 
-  const char* env_p = getenv("VEO_MAXINFLIGHT");
-  size_t maxinfl = 8;
-  if (const char* env_p = getenv("VEO_MAXINFLIGHT"))
-    maxinfl = atoi(env_p);
+  ve_handler_loop((void *)&arg);
 
-  urpc_peer_t *up = ve_urpc_init(0, -1);
-  if (up == NULL)
+  if (main_up == NULL)
     return -1;
 
-  main_up = up;
-  urpc_set_receiver_flags(&up->recv, 1);
-
-  dprintf("VE: set receiver flag to 1.\n");
-
-  while (!veo_finish_) {
-    // carefull with number of progress calls
-    // number * max_send_buff_size should not be larger than what we have
-    // as send buffer memory
-#ifdef SYNCDMA
-    err = ve_urpc_recv_progress(up, 3, maxinfl);
-#else
-    err = ve_urpc_recv_progress(up, 10, maxinfl);
-#ifdef DEBUGMEM
-    if (timediff_us(ts) > 100000) {
-      dhq_state(up);
-      ts = get_time_us();
-    }
-#endif
-#endif
+  for (int i = 0; i < __num_ve_peers; i++) {
+    void *ret;
+    pthread_join(__handler_loop_pthreads[i], &ret);
   }
-
-  ve_urpc_fini(up);
   return 0;
 }

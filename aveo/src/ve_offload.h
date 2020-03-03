@@ -75,10 +75,13 @@ int veo_alloc_mem(struct veo_proc_handle *, uint64_t *, const size_t);
 int veo_free_mem(struct veo_proc_handle *, uint64_t);
 int veo_read_mem(struct veo_proc_handle *, void *, uint64_t, size_t);
 int veo_write_mem(struct veo_proc_handle *, uint64_t, const void *, size_t);
+int veo_num_contexts(struct veo_proc_handle *);
+struct veo_thr_ctxt *veo_get_context(struct veo_proc_handle *, int);
 
 struct veo_thr_ctxt *veo_context_open(struct veo_proc_handle *);
 int veo_context_close(struct veo_thr_ctxt *);
 int veo_get_context_state(struct veo_thr_ctxt *);
+void veo_context_sync(struct veo_thr_ctxt *);
 
 struct veo_args *veo_args_alloc(void);
 int veo_args_set_i64(struct veo_args *, int, int64_t);

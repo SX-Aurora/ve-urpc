@@ -318,6 +318,34 @@ int veo_write_mem(veo_proc_handle *h, uint64_t dst, const void *src,
 }
 
 /**
+ * @brief Return number of open contexts in a proc
+ *
+ * @param h VEO process handle
+ * @return number of open contexts.
+ */
+int veo_num_contexts(veo_proc_handle *h)
+{
+  return ProcHandleFromC(h)->numContexts();
+}
+
+veo_thr_ctxt *veo_get_context(veo_proc_handle *proc, int idx)
+{
+  try {
+    veo_thr_ctxt *ctx = ProcHandleFromC(proc)->getContext(idx)->toCHandle();
+    auto rv = reinterpret_cast<intptr_t>(ctx);
+    if ( rv < 0 ) {
+      errno = -rv;
+      return NULL;
+    }
+    return ctx;
+  } catch (VEOException &e) {
+    VEO_ERROR(nullptr, "failed to retrieve context %d: %s", idx, e.what());
+    errno = e.err();
+    return NULL;
+  }
+}
+
+/**
  * @brief open a VEO context
  *
  * Create a new VEO context, a pseudo thread and VE thread for the context.
@@ -353,14 +381,26 @@ veo_thr_ctxt *veo_context_open(veo_proc_handle *proc)
 int veo_context_close(veo_thr_ctxt *ctx)
 {
   auto c = ThreadContextFromC(ctx);
-  if (c->isMainThread()) {
+  if (c->isMain()) {
     return 0;
   }
-  int rv = c->close();
-  if (rv == 0) {
-    delete c;
-  }
-  return rv;
+  veo::ProcHandle *p = c->proc;
+  p->delContext(c);
+  return 0;
+}
+
+/**
+ * @brief synchronize a VEO context
+ *
+ * While the submission lock is held, wait until all
+ * commands have been processed in this context.
+ *
+ * @param ctx the VEO context to synchronize
+ */
+void veo_context_sync(veo_thr_ctxt *ctx)
+{
+  auto c = ThreadContextFromC(ctx);
+  c->synchronize();
 }
 
 /**

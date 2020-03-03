@@ -25,12 +25,12 @@ class CallArgs;
 class ThreadContext {
   friend class ProcHandle;// ProcHandle controls the main thread directly.
 private:
-  ProcHandle *proc;
   CommQueue comq;
   veo_context_state state;
-  bool is_main_thread;
+  bool is_main;
   uint64_t seq_no;
   uint64_t ve_sp;
+  int core;			//!< VE core to which the handler is pinned
   urpc_peer_t *up;		//!< ve-urpc peer pointer, each ctx has one
   std::unordered_set<uint64_t> rem_reqid; // TODO: move this away from here!
   std::mutex req_mtx;   //!< protects rem_reqid
@@ -40,7 +40,6 @@ private:
   void _progress_nolock(int ops);
   void progress(int ops);
   void _synchronize_nolock();
-  void synchronize();
   /**
    * @brief Issue a new request ID
    * @return a request ID, 64 bit integer, to identify a command
@@ -59,17 +58,21 @@ private:
   int _readMem(void *, uint64_t, size_t);
   int _writeMem(uint64_t, const void *, size_t);
   uint64_t _callOpenContext(ProcHandle *, uint64_t, CallArgs &);
+  void _delFromProc();
+
 public:
-  ThreadContext(ProcHandle *, urpc_peer_t *up);
+  ThreadContext(ProcHandle *, urpc_peer_t *up, bool is_main);
   ThreadContext(ProcHandle *);
-  ~ThreadContext() {};
+  ~ThreadContext() {}
   ThreadContext(const ThreadContext &) = delete;//non-copyable
   veo_context_state getState() { return this->state; }
+  int callSync(uint64_t addr, CallArgs &arg, uint64_t *result);
   uint64_t callAsync(uint64_t, CallArgs &);
   uint64_t callAsyncByName(uint64_t, const char *, CallArgs &);
   uint64_t callVHAsync(uint64_t (*)(void *), void *);
   int callWaitResult(uint64_t, uint64_t *);
   int callPeekResult(uint64_t, uint64_t *);
+  void synchronize();
 
   uint64_t sendbuffAsync(uint64_t dst, void *src, size_t size);
   uint64_t recvbuffAsync(void *dst, uint64_t src, size_t size);
@@ -79,9 +82,11 @@ public:
   veo_thr_ctxt *toCHandle() {
     return reinterpret_cast<veo_thr_ctxt *>(this);
   }
-  bool isMainThread() { return this->is_main_thread;}
+  bool isMain() { return this->is_main;}
   int64_t _closeCommandHandler(uint64_t id);
   int close();
+
+  ProcHandle *proc;
 
 };
 

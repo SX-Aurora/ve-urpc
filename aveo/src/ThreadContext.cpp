@@ -20,8 +20,8 @@
 
 namespace veo {
 
-ThreadContext::ThreadContext(ProcHandle *p, urpc_peer_t *up):
-  proc(p), up(up), state(VEO_STATE_UNKNOWN), is_main_thread(true), seq_no(0) {}
+  ThreadContext::ThreadContext(ProcHandle *p, urpc_peer_t *up, bool is_main):
+  proc(p), up(up), state(VEO_STATE_UNKNOWN), is_main(is_main), seq_no(0) {}
 
 /**
  * @brief function to be set to close request (command)
@@ -55,10 +55,14 @@ int ThreadContext::close()
   if ( this->state == VEO_STATE_EXIT )
     return 0;
   // not closing a main thread, just ignoring the request
-  if (this->isMainThread())
+  if (this->isMain())
     return 0;
 
-  // TODO: send exit URPC
+  this->state = VEO_STATE_EXIT;
+  uint64_t req = urpc_generic_send(up, URPC_CMD_EXIT, (char *)"");
+  wait_req_ack(this->up, req);
+  vh_urpc_peer_destroy(this->up);
+  return 0;
 }
 
 /**
@@ -172,6 +176,38 @@ void ThreadContext::_synchronize_nolock()
   while(!(this->comq.emptyRequest() && this->comq.emptyInFlight())) {
     this->progress(0);
   }
+}
+
+/**
+ * @brief start a function on the VE, wait for result and return it.
+ *
+ * @param addr VEMVA of function called
+ * @param args arguments of the function
+ * @param result pointer to result
+ * @return 0 if all went well.
+ */
+int ThreadContext::callSync(uint64_t addr, CallArgs &arg, uint64_t *result)
+{
+  urpc_mb_t m;
+  void *payload;
+  size_t plen;
+
+  std::lock_guard<std::mutex> lock(this->submit_mtx);
+  this->_synchronize_nolock();
+  VEO_TRACE(nullptr, "%s(%#lx, ...)", __func__, addr);
+  VEO_DEBUG(nullptr, "VE function = %p", (void *)addr);
+
+  int64_t req = send_call_nolock(this->up, this->ve_sp, addr, arg);
+
+  // TODO: make sync call timeout configurable
+  if (!urpc_recv_req_timeout(this->up, &m, req, 150*REPLY_TIMEOUT, &payload, &plen)) {
+    // timeout! complain.
+    eprintf("callSync timeout waiting for RESULT req=%ld\n", req);
+    return -1;
+  }
+  int rc = unpack_call_result(&m, &arg, payload, plen, result);
+  urpc_slot_done(this->up->recv.tq, REQ2SLOT(req), &m);
+  return rc;
 }
 
 /**

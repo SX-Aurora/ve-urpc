@@ -10,8 +10,8 @@
 extern "C" {
 #endif
 
-int veo_finish_ = 0;
-  
+  __thread int __veo_finish;
+
 using namespace veo;
 
   //
@@ -28,8 +28,15 @@ static int ping_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
 static int exit_handler(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
                         void *payload, size_t plen)
 {
-  veo_finish_ = 1;
+  __veo_finish = 1;
+  dprintf("up=%p has received the EXIT command\n", (void *)up);
   urpc_generic_send(up, URPC_CMD_ACK, (char *)"");
+#ifdef __ve__
+  ve_urpc_fini(up);
+#else
+  vh_urpc_peer_destroy(up);
+#endif
+  pthread_exit(0);
   return 0;
 }
 

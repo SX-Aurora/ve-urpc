@@ -4,8 +4,8 @@ NAR = /opt/nec/ve/bin/nar
 GCC = gcc
 GPP = g++
 AR = ar
-#DEBUG = -g
-OPT = -O3
+DEBUG = -g
+OPT = -O0
 INCL = -I$(DEST)/include -I. -I../src -I../../src
 GPPFLAGS = -std=gnu++11 -pthread $(OPT) $(DEBUG) $(INCL)
 GCCFLAGS = -std=c11 -pthread  $(OPT) $(DEBUG) $(INCL)
