@@ -4,7 +4,6 @@
 #include "ve_inst.h"
 #include "urpc_time.h"
 #ifdef __ve__
-//#include <vedma.h>
 #else
 #include "vh_shm.h"
 #endif
@@ -21,26 +20,26 @@ int wait_peer_attach(urpc_peer_t *up)
 #endif
 }
 
-uint32_t urpc_get_receiver_flags(urpc_comm_t *uc)
+uint32_t urpc_get_receiver_flags(urpc_peer_t *up)
 {
-	return TQ_READ32(uc->tq->receiver_flags);
+	return TQ_READ32(up->recv.tq->receiver_flags);
 
 }
 
-void urpc_set_receiver_flags(urpc_comm_t *uc, uint32_t flags)
+void urpc_set_receiver_flags(urpc_peer_t *up, uint32_t flags)
 {
-	TQ_WRITE32(uc->tq->receiver_flags, flags);
+	TQ_WRITE32(up->recv.tq->receiver_flags, flags);
 }
 
-uint32_t urpc_get_sender_flags(urpc_comm_t *uc)
+uint32_t urpc_get_sender_flags(urpc_peer_t *up)
 {
-	return TQ_READ32(uc->tq->sender_flags);
+	return TQ_READ32(up->send.tq->sender_flags);
 
 }
 
-void urpc_set_sender_flags(urpc_comm_t *uc, uint32_t flags)
+void urpc_set_sender_flags(urpc_peer_t *up, uint32_t flags)
 {
-	TQ_WRITE32(uc->tq->sender_flags, flags);
+	TQ_WRITE32(up->send.tq->sender_flags, flags);
 }
 
 /*
@@ -123,11 +122,11 @@ int64_t urpc_get_req(transfer_queue_t *tq, urpc_mb_t *m, int64_t req)
 
   Returns: slot for cmd or -1
  */
-void urpc_slot_done(transfer_queue_t *tq, int slot, urpc_mb_t *m)
+void urpc_slot_done(urpc_peer_t *up, int slot, urpc_mb_t *m)
 {
 	m->c.cmd = URPC_CMD_NONE;
         TQ_FENCE();
-	TQ_WRITE64(tq->mb[slot].u64, m->u64);
+	TQ_WRITE64(up->recv.tq->mb[slot].u64, m->u64);
         TQ_FENCE();
 }
 
