@@ -190,17 +190,16 @@ int vh_urpc_recv_progress(urpc_peer_t *up, int ncmds);
 #endif
 
 int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...);
-int urpc_unpack_payload(void *payload, size_t psz, char *fmt, ...);
+uint32_t urpc_get_receiver_flags(urpc_peer_t *up);
+uint32_t urpc_get_sender_flags(urpc_peer_t *up);
 int urpc_recv_req_timeout(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
                           long timeout_us, void **payload, size_t *plen);
-void urpc_slot_done(urpc_peer_t *up, int slot, urpc_mb_t *m);
+int urpc_register_handler(urpc_peer_t *up, int cmd, urpc_handler_func h);
 void urpc_set_handler_init_hook(void (*func)(urpc_peer_t *up));
 void urpc_set_receiver_flags(urpc_peer_t *up, uint32_t flags);
 void urpc_set_sender_flags(urpc_peer_t *up, uint32_t flags);
-uint32_t urpc_get_receiver_flags(urpc_peer_t *up);
-uint32_t urpc_get_sender_flags(urpc_peer_t *up);
-int urpc_register_handler(urpc_peer_t *up, int cmd,
-                          int (*)(urpc_peer_t *, urpc_mb_t *, int64_t, void *, size_t);
+void urpc_slot_done(urpc_peer_t *up, int slot, urpc_mb_t *m);
+int urpc_unpack_payload(void *payload, size_t psz, char *fmt, ...);
 
 #ifdef __cplusplus
 }
