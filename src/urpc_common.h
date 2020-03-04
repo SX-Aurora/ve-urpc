@@ -207,6 +207,7 @@ struct urpc_peer {
 	void *shm_addr;
 #ifdef __ve__
 	uint64_t shm_vehva;
+	void *mirr_buff;
 	int core;
 #endif
 	int shm_destroyed;

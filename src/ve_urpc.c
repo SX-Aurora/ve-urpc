@@ -1,9 +1,15 @@
-/*
-
-*/
+/**
+ * TODO: add License header
+ *
+ * VE specific parts of VE-URPC.
+ * 
+ * (C)opyright 2020 Erich Focht
+ */
 
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
 #include <assert.h>
 #include <errno.h>
 #include <sys/mman.h>
@@ -18,10 +24,6 @@
 #include "urpc_common.h"
 #include "urpc_time.h"
 
-
-// The following variables are thread local because each Context Thread can be a peer!
-//__thread int this_peer = -1;			// local peer ID
-//__thread struct ve_udma_peer *udma_peer;	// this peer's UDMA comm struct
 
 /*
   Initialize VH-SHM segment, map it as VEHVA.
@@ -121,6 +123,14 @@ urpc_peer_t *ve_urpc_init(int segid)
 {
 	int err = 0;
 	char *e;
+
+	long syscall(long n, ...);
+	pid_t tid = syscall(SYS_gettid);
+	if (getpid() != tid) {
+		eprintf("You called ve_urpc_init() inside a forked/cloned thread.\n");
+		eprintf("VE DMA registration must be called from the main thread!\n");
+		return NULL;
+	}
 	urpc_peer_t *up = (urpc_peer_t *)malloc(sizeof(urpc_peer_t));
 	if (up == NULL) {
 		eprintf("unable to allocate urpc_peer struct memory\n");
@@ -137,7 +147,7 @@ urpc_peer_t *ve_urpc_init(int segid)
 		if ((e = getenv("URPC_SHM_SEGID")) != NULL)
 			up->shm_segid = atol(e);
 		else {
-			eprintf("ERROR: env variable URPC_SHM_SEGID not found.\n");
+			eprintf("env variable URPC_SHM_SEGID not found.\n");
 			free(up);
                         errno = ENOENT;
 			return NULL;
@@ -168,15 +178,14 @@ urpc_peer_t *ve_urpc_init(int segid)
 	buff_size = (buff_size + align_64mb - 1) & ~(align_64mb - 1);
 
 	// allocate read and write buffers in one call
-	posix_memalign((void **)&buff_base, align_64mb, buff_size);
-	if (buff_base == NULL) {
+	posix_memalign(&up->mirr_buff, align_64mb, buff_size);
+	if (up->mirr_buff == NULL) {
 		eprintf("VE: allocating urpc mirror buffer failed! buffsize=%lu\n", buff_size);
                 errno = ENOMEM;
 		return NULL;
 	}
-	dprintf("ve allocated buff at %p, size=%lu\n", buff_base, buff_size);
-        // TODO: is this needed?
-	//busy_sleep_us(1*1000*1000);
+	dprintf("ve allocated buff at %p, size=%lu\n", up->mirr_buff, buff_size);
+        buff_base = (char *)up->mirr_buff;
 	buff_base_vehva = ve_register_mem_to_dmaatb(buff_base, buff_size);
 	if (buff_base_vehva == (uint64_t)-1) {
 		eprintf("VE: mapping urpc mirror buffer failed! buffsize=%lu\n", buff_size);
@@ -236,6 +245,8 @@ void ve_urpc_fini(urpc_peer_t *up)
 					    offsetof(transfer_queue_t, data));
 	if (err)
 		eprintf("VE: Failed to unregister local buffer from DMAATB\n");
+        // free the mirror buffer
+        free(up->mirr_buff);
 
 	// detach VH sysV shm segment
 	if (up->shm_addr) {
