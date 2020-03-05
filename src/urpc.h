@@ -200,6 +200,7 @@ int vh_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us);
 #endif
 
 int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...);
+int64_t urpc_get_cmd(transfer_queue_t *tq, urpc_mb_t *m);
 uint32_t urpc_get_receiver_flags(urpc_comm_t *uc);
 uint32_t urpc_get_sender_flags(urpc_comm_t *uc);
 int64_t urpc_put_cmd(urpc_peer_t *up, urpc_mb_t *m);
