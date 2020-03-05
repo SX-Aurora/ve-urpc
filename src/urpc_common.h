@@ -1,13 +1,6 @@
 #ifndef URPC_COMMON_INCLUDE
 #define URPC_COMMON_INCLUDE
 
-#include <errno.h>
-#include <stdio.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <string.h>
-#include <pthread.h>
-
 #include "urpc.h"
 #include "urpc_debug.h"
 #ifdef __ve__
@@ -51,22 +44,13 @@ extern "C" {
 #endif
 
 #ifdef __ve__
-
 int ve_transfer_data_sync(uint64_t dst_vehva, uint64_t src_vehva, int len);
-int ve_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us);
-
-#else
-
-int vh_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us);
-
 #endif
 
-int wait_peer_attach(urpc_peer_t *up);
 int64_t urpc_get_cmd(transfer_queue_t *tq, urpc_mb_t *m);
 int set_recv_payload(urpc_comm_t *uc, urpc_mb_t *m, void **payload, size_t *plen);
 int64_t urpc_get_cmd_timeout(transfer_queue_t *tq, urpc_mb_t *m, long timeout_us);
 int64_t urpc_next_send_slot(urpc_peer_t *up);
-int64_t urpc_put_cmd(urpc_peer_t *up, urpc_mb_t *m);
 void urpc_run_handler_init_hooks(urpc_peer_t *up);
 uint64_t alloc_payload(urpc_comm_t *uc, uint32_t size);
 

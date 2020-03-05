@@ -1,7 +1,8 @@
 #include <stdio.h>
 
-#include "urpc_common.h"
+#include "urpc.h"
 #include "urpc_time.h"
+#include "urpc_debug.h"
 #include "pingpong.h"
 
 void vh_print_shm_coords(urpc_peer_t *up)
@@ -17,22 +18,22 @@ int main(int argc, char *argv[])
 	int err = 0;
 	long ts, te;
 
-        extern void pingpong_init(urpc_peer_t *);
-        extern int finish;
-        urpc_set_handler_init_hook(&pingpong_init);
+	extern void pingpong_init(urpc_peer_t *);
+	extern int finish;
+	urpc_set_handler_init_hook(&pingpong_init);
 
 	urpc_peer_t *up = vh_urpc_peer_create();
 	if (up == NULL)
 		return -1;
 
-        // start VE peer
-        err = vh_urpc_child_create(up, "./pong_ve", 0, -1);
-        if (!err)
+	// start VE peer
+	err = vh_urpc_child_create(up, "./pong_ve", 0, -1);
+	if (!err)
 		printf("VH: VE peer created as pid %d\n", up->child_pid);
 
 	//vh_print_shm_coords(up);
 
-        wait_peer_attach(up);
+	urpc_wait_peer_attach(up);
 
 	if (pthread_mutex_trylock(&up->lock) != 0) {
 		eprintf("found mutex locked!?\n");

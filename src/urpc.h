@@ -1,6 +1,13 @@
 #ifndef URPC_H_INCLUDE
 #define URPC_H_INCLUDE
 
+#include <errno.h>
+#include <stdio.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+#include <pthread.h>
+
 #define MAX_VE_CORES   8
 /* maximum number of peer currently limited to 80 = 8 VEs * 10 cores */
 #define URPC_MAX_PEERS (8 * MAX_VE_CORES)
@@ -177,6 +184,7 @@ int ve_urpc_init_dma(urpc_peer_t *up, int core);
 void ve_urpc_unpin(void);
 void ve_urpc_fini(urpc_peer_t *up);
 int ve_urpc_recv_progress(urpc_peer_t *up, int ncmds);
+int ve_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us);
 
 # else
 
@@ -186,20 +194,24 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
                          int ve_node, int ve_core);
 int vh_urpc_child_destroy(urpc_peer_t *up);
 int vh_urpc_recv_progress(urpc_peer_t *up, int ncmds);
+int vh_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us);
+
 
 #endif
 
 int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...);
-uint32_t urpc_get_receiver_flags(urpc_peer_t *up);
-uint32_t urpc_get_sender_flags(urpc_peer_t *up);
+uint32_t urpc_get_receiver_flags(urpc_comm_t *uc);
+uint32_t urpc_get_sender_flags(urpc_comm_t *uc);
+int64_t urpc_put_cmd(urpc_peer_t *up, urpc_mb_t *m);
 int urpc_recv_req_timeout(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
                           long timeout_us, void **payload, size_t *plen);
 int urpc_register_handler(urpc_peer_t *up, int cmd, urpc_handler_func h);
 void urpc_set_handler_init_hook(void (*func)(urpc_peer_t *up));
-void urpc_set_receiver_flags(urpc_peer_t *up, uint32_t flags);
-void urpc_set_sender_flags(urpc_peer_t *up, uint32_t flags);
-void urpc_slot_done(urpc_peer_t *up, int slot, urpc_mb_t *m);
+void urpc_set_receiver_flags(urpc_comm_t *uc, uint32_t flags);
+void urpc_set_sender_flags(urpc_comm_t *uc, uint32_t flags);
+void urpc_slot_done(transfer_queue_t *tq, int slot, urpc_mb_t *m);
 int urpc_unpack_payload(void *payload, size_t psz, char *fmt, ...);
+int urpc_wait_peer_attach(urpc_peer_t *up);
 
 #ifdef __cplusplus
 }

@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#include "urpc_common.h"
+#include "urpc.h"
 #include "pingpong.h"
 
 int main()

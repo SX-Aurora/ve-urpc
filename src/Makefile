@@ -26,17 +26,17 @@ ALL: $(LIBS)
 # VH objects below
 
 %/vh_shm.o: vh_shm.c vh_shm.h
-%/vh_urpc.o: vh_urpc.c urpc_common.h vh_shm.h 
-%/urpc_common_vh.o: urpc_common.c urpc_common.h urpc_time.h
-%/init_hook_vh.o: init_hook.c urpc_common.h
+%/vh_urpc.o: vh_urpc.c urpc_common.h urpc.h vh_shm.h
+%/urpc_common_vh.o: urpc_common.c urpc_common.h urpc.h urpc_time.h
+%/init_hook_vh.o: init_hook.c urpc_common.h urpc.h
 
 
 #  VE objects below
 
-%/ve_urpc.o: ve_urpc.c urpc_common.h urpc_time.h ve_inst.h
-%/ve_urpc_omp.o: ve_urpc.c urpc_common.h urpc_time.h ve_inst.h
-%/urpc_common_ve.o: urpc_common.c urpc_common.h urpc_time.h
-%/init_hook_ve.o: init_hook.c urpc_common.h
+%/ve_urpc.o: ve_urpc.c urpc_common.h urpc.h urpc_time.h ve_inst.h
+%/ve_urpc_omp.o: ve_urpc.c urpc_common.h urpc.h urpc_time.h ve_inst.h
+%/urpc_common_ve.o: urpc_common.c urpc_common.h urpc.h urpc_time.h
+%/init_hook_ve.o: init_hook.c urpc_common.h urpc.h
 
 
 install: $(LIBS) | $(DEST)/lib/ $(DEST)/include/

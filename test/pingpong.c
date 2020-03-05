@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#include "urpc_common.h"
+#include "urpc.h"
+#include "urpc_debug.h"
 
 int pings = 0;
 int pongs = 0;
