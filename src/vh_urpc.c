@@ -12,6 +12,7 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/stat.h>
+#include <wait.h>
 #include <signal.h>
 
 #include "vh_shm.h"
@@ -195,9 +196,12 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 int vh_urpc_child_destroy(urpc_peer_t *up)
 {
 	int rc = -ENOENT;
+        int status;
 
 	if (up->child_pid > 0) {
 		rc = kill(up->child_pid, SIGKILL);
+                waitpid(up->child_pid, &status, 0);
+                dprintf("waitpid(%d) returned status=%d\n", status);
 		up->child_pid = -1;
 	}
 	return rc;
