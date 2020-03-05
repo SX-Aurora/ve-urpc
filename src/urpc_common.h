@@ -8,8 +8,6 @@
 //#include "dma_handler.h"
 #endif
 
-#define REQ2SLOT(r) (int32_t)((r) & (URPC_LEN_MB - 1))
-
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
@@ -47,9 +45,7 @@ extern "C" {
 int ve_transfer_data_sync(uint64_t dst_vehva, uint64_t src_vehva, int len);
 #endif
 
-int set_recv_payload(urpc_comm_t *uc, urpc_mb_t *m, void **payload, size_t *plen);
 int64_t urpc_get_cmd_timeout(transfer_queue_t *tq, urpc_mb_t *m, long timeout_us);
-int64_t urpc_next_send_slot(urpc_peer_t *up);
 void urpc_run_handler_init_hooks(urpc_peer_t *up);
 uint64_t alloc_payload(urpc_comm_t *uc, uint32_t size);
 

@@ -34,6 +34,8 @@
 #define URPC_TIMEOUT_US (10 * 1000000)
 #define URPC_ALLOC_TIMEOUT_US (60 * 1000000)
 
+#define REQ2SLOT(r) (int32_t)((r) & (URPC_LEN_MB - 1))
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -199,10 +201,12 @@ int vh_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us);
 
 #endif
 
+int set_recv_payload(urpc_comm_t *uc, urpc_mb_t *m, void **payload, size_t *plen);
 int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...);
 int64_t urpc_get_cmd(transfer_queue_t *tq, urpc_mb_t *m);
 uint32_t urpc_get_receiver_flags(urpc_comm_t *uc);
 uint32_t urpc_get_sender_flags(urpc_comm_t *uc);
+int64_t urpc_next_send_slot(urpc_peer_t *up);
 int64_t urpc_put_cmd(urpc_peer_t *up, urpc_mb_t *m);
 int urpc_recv_req_timeout(urpc_peer_t *up, urpc_mb_t *m, int64_t req,
                           long timeout_us, void **payload, size_t *plen);
