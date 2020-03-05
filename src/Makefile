@@ -40,8 +40,8 @@ ALL: $(LIBS)
 
 
 install: $(LIBS) | $(DEST)/lib/ $(DEST)/include/
-	cp -p $(LIBS) $(DEST)/lib
-	cp -p $(INCLUDES) $(DEST)/include
+	/usr/bin/install -t $(DEST)/lib $(LIBS)
+	/usr/bin/install -t $(DEST)/include $(INCLUDES)
 
 
 .SECONDEXPANSION:
