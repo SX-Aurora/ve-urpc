@@ -11,8 +11,6 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-#define ALIGN8B(x) (((uint64_t)(x) + 7UL) & ~7UL)
-
 #ifdef __ve__
 # define TQ_READ64(v) ve_inst_lhm((void *)&(v))
 # define TQ_READ32(v) ve_inst_lhm32((void *)&(v))

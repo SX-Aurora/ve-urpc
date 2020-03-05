@@ -34,6 +34,7 @@
 #define URPC_TIMEOUT_US (10 * 1000000)
 #define URPC_ALLOC_TIMEOUT_US (60 * 1000000)
 
+#define ALIGN8B(x) (((uint64_t)(x) + 7UL) & ~7UL)
 #define REQ2SLOT(r) (int32_t)((r) & (URPC_LEN_MB - 1))
 
 
@@ -197,7 +198,6 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 int vh_urpc_child_destroy(urpc_peer_t *up);
 int vh_urpc_recv_progress(urpc_peer_t *up, int ncmds);
 int vh_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us);
-
 
 #endif
 
