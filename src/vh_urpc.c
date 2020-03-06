@@ -20,6 +20,8 @@
 #include "urpc_time.h"
 
 static int _urpc_num_peers = 0;
+static struct sigaction __reaper_sa = {0};
+
 
 static void vh_urpc_comm_init(urpc_comm_t *uc)
 {
@@ -129,6 +131,12 @@ static int argsexp(char *args, char **argv, int maxargs)
 	return argc;
 }
 
+static void handle_sigchld(int sig) {
+	int saved_errno = errno;
+	while (waitpid((pid_t)(-1), 0, WNOHANG) > 0) {}
+	errno = saved_errno;
+}
+
 /*
   Create a child process running the binary in the args. Create appropriate
   environment vars for the child process and store the pid of the new process.
@@ -159,11 +167,16 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 		return -ENOENT;
 	}
 
-        // let the system reap the child process
-	if (signal(SIGCHLD, SIG_IGN) == SIG_ERR) {
-		perror(0);
-		exit(1);
+	if (__reaper_sa.sa_handler == NULL) {
+		__reaper_sa.sa_handler = &handle_sigchld;
+		sigemptyset(&__reaper_sa.sa_mask);
+		__reaper_sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+		if (sigaction(SIGCHLD, &__reaper_sa, 0) == -1) {
+			perror("Could not register reaper sighandler");
+			exit(1);
+		}
 	}
+
 	pid_t c_pid = fork();
 	if (c_pid == 0) {
 		// this is the child
@@ -184,16 +197,15 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 		if (err) {
 			perror("ERROR: execve");
 			_exit(errno);
+		} else if (c_pid > 0) {
+			// this is the parent
+			free(args);
+			up->child_pid = c_pid;
+		} else {
+			// this is an error
+			perror("ERROR vh_urpc_child_create");
+			return -errno;
 		}
-
-	} else if (c_pid > 0) {
-		// this is the parent
-		free(args);
-		up->child_pid = c_pid;
-	} else {
-		// this is an error
-		perror("ERROR vh_urpc_child_create");
-		return -errno;
 	}
 	return 0;
 }
@@ -204,6 +216,7 @@ int vh_urpc_child_destroy(urpc_peer_t *up)
         int status;
 
 	if (up->child_pid > 0) {
+		printf("Sending SIGKILL to child");
 		rc = kill(up->child_pid, SIGKILL);
                 waitpid(up->child_pid, &status, 0);
                 dprintf("waitpid(%d) returned status=%d\n", status);
