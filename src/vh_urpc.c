@@ -158,7 +158,12 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 		perror("stat");
 		return -ENOENT;
 	}
-	
+
+        // let the system reap the child process
+	if (signal(SIGCHLD, SIG_IGN) == SIG_ERR) {
+		perror(0);
+		exit(1);
+	}
 	pid_t c_pid = fork();
 	if (c_pid == 0) {
 		// this is the child
@@ -195,7 +200,7 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 
 int vh_urpc_child_destroy(urpc_peer_t *up)
 {
-	int rc = -ENOENT;
+	int rc = 0;
         int status;
 
 	if (up->child_pid > 0) {
