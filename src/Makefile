@@ -7,7 +7,8 @@ include ../make.inc
 VHLIB_OBJ := init_hook.o vh_shm.o vh_urpc.o urpc_common.o memory.o
 VELIB_OBJ := init_hook.o ve_urpc.o urpc_common.o memory.o
 
-LIBS := $(BLIB)/liburpcVH.so $(BLIB)/liburpcVE.so $(BLIB)/liburpcVE_omp.so
+LIBS := $(addprefix $(BLIB)/,liburpcVH.so liburpcVE.so liburpcVE_omp.so \
+  liburpcVH.a liburpcVE.a liburpcVE_omp.a)
 INCLUDES := urpc.h urpc_debug.h urpc_time.h
 
 VHLIB_OBJS := $(addprefix $(BVH)/,$(VHLIB_OBJ))
@@ -58,6 +59,14 @@ $(BLIB)/liburpcVE_omp.so: $(VELIB_OBJS_OMP) | $$(@D)/
 	$(NCC) -Wl,-zdefs $(NCCFLAGS) -fpic -shared -fopenmp -o $@ $^ -lveio -lveftrace
 #	$(NCC) -Wl,-zdefs -Wl,--version-script=liburpc_ve.map $(NCCFLAGS) -fpic -shared -fopenmp -o $@ $< -lveio
 
+$(BLIB)/liburpcVH.a: $(VHLIB_OBJS) | $$(@D)/
+	$(AR) rv $@ $^
+
+$(BLIB)/liburpcVE.a: $(VELIB_OBJS) | $$(@D)/
+	$(NAR) rv $@ $^
+
+$(BLIB)/liburpcVE_omp.a: $(VELIB_OBJS_OMP) | $$(@D)/
+	$(NAR) rv $@ $^
 
 $(BVH)/%.o: %.c | $$(@D)/
 	$(GCC) $(GCCFLAGS) -fpic -o $@ -c $<
