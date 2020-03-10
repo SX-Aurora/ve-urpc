@@ -54,16 +54,16 @@ urpc_peer_t *vh_urpc_peer_create(void)
 	int rc = 0, i, peer_id;
 	char *env, *mb_offs = NULL;
 
-        if (_urpc_num_peers == URPC_MAX_PEERS) {
+	if (_urpc_num_peers == URPC_MAX_PEERS) {
 		eprintf("veo_urpc_peer_init: max number of urpc peers reached!\n");
-                errno = -ENOMEM;
+		errno = -ENOMEM;
 		return NULL;
-        }
+	}
 
 	urpc_peer_t *up = (urpc_peer_t *)malloc(sizeof(urpc_peer_t));
 	if (!up) {
 		eprintf("veo_urpc_peer_create: malloc peer struct failed.\n");
-                errno = -ENOMEM;
+		errno = -ENOMEM;
 		return NULL;
 	}
 	memset(up, 0, sizeof(up));
@@ -71,17 +71,17 @@ urpc_peer_t *vh_urpc_peer_create(void)
 	/* TODO: make key VE and core specific to avoid duplicate use of UDMA */
 	up->shm_key = getpid() * URPC_MAX_PEERS + _urpc_num_peers;
 	up->shm_size = 2 * URPC_BUFF_LEN;
-        /*
-         * Allocate shared memory segment
-         */
+	/*
+	 * Allocate shared memory segment
+	 */
 	up->shm_segid = _vh_shm_init(up->shm_key, up->shm_size, &up->shm_addr);
 	if (up->shm_segid == -1) {
 		rc = _vh_shm_fini(up->shm_segid, up->shm_addr);
-                errno = -ENOMEM;
+		errno = -ENOMEM;
 		return NULL;
 	}
 
-        _urpc_num_peers++;
+	_urpc_num_peers++;
 
 	//
 	// Set up send communicator
@@ -89,10 +89,10 @@ urpc_peer_t *vh_urpc_peer_create(void)
 	up->send.tq = (transfer_queue_t *)up->shm_addr;
 	vh_urpc_comm_init(&up->send);
 
-        //
-        // Set up recv communicator
-        //
-        up->recv.tq = (transfer_queue_t *)(up->shm_addr + URPC_BUFF_LEN);
+    //
+    // Set up recv communicator
+    //
+    up->recv.tq = (transfer_queue_t *)(up->shm_addr + URPC_BUFF_LEN);
 	vh_urpc_comm_init(&up->recv);
 
         pthread_mutex_init(&up->lock, NULL);
@@ -100,7 +100,7 @@ urpc_peer_t *vh_urpc_peer_create(void)
 	// initialize handler table
 	for (int i = 0; i <= URPC_MAX_HANDLERS; i++)
 		up->handler[i] = NULL;
-        urpc_run_handler_init_hooks(up);
+	urpc_run_handler_init_hooks(up);
 
 	return up;
 }
@@ -122,8 +122,7 @@ static int argsexp(char *args, char **argv, int maxargs)
 	int argc = 0;
 	
 	char *p2 = strtok(args, " ");
-	while (p2 && argc < maxargs-1)
-	{
+	while (p2 && argc < maxargs-1) {
 		argv[argc++] = p2;
 		p2 = strtok(0, " ");
 	}
@@ -131,7 +130,8 @@ static int argsexp(char *args, char **argv, int maxargs)
 	return argc;
 }
 
-static void handle_sigchld(int sig) {
+static void handle_sigchld(int sig)
+{
 	int saved_errno = errno;
 	while (waitpid((pid_t)(-1), 0, WNOHANG) > 0) {}
 	errno = saved_errno;
@@ -213,13 +213,13 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 int vh_urpc_child_destroy(urpc_peer_t *up)
 {
 	int rc = 0;
-        int status;
+	int status;
 
 	if (up->child_pid > 0) {
 		printf("Sending SIGKILL to child");
 		rc = kill(up->child_pid, SIGKILL);
-                waitpid(up->child_pid, &status, 0);
-                dprintf("waitpid(%d) returned status=%d\n", status);
+		waitpid(up->child_pid, &status, 0);
+		dprintf("waitpid(%d) returned status=%d\n", status);
 		up->child_pid = -1;
 	}
 	return rc;

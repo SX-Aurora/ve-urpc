@@ -149,7 +149,7 @@ urpc_peer_t *ve_urpc_init(int segid)
 		else {
 			eprintf("env variable URPC_SHM_SEGID not found.\n");
 			free(up);
-                        errno = ENOENT;
+			errno = ENOENT;
 			return NULL;
 		}
 	}
@@ -181,7 +181,7 @@ urpc_peer_t *ve_urpc_init(int segid)
 	posix_memalign(&up->mirr_buff, align_64mb, buff_size);
 	if (up->mirr_buff == NULL) {
 		eprintf("VE: allocating urpc mirror buffer failed! buffsize=%lu\n", buff_size);
-                errno = ENOMEM;
+    	errno = ENOMEM;
 		return NULL;
 	}
 	dprintf("ve allocated buff at %p, size=%lu\n", up->mirr_buff, buff_size);
