@@ -166,7 +166,10 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 		perror("stat");
 		return -ENOENT;
 	}
-
+#if 0
+	// For an unknown reason, if we have the SIGCHLD reaper in place
+	// and call system() several times, it will randomly return
+	// an error or succeed.
 	if (__reaper_sa.sa_handler == NULL) {
 		__reaper_sa.sa_handler = &handle_sigchld;
 		sigemptyset(&__reaper_sa.sa_mask);
@@ -176,6 +179,7 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 			exit(1);
 		}
 	}
+#endif
 
 	pid_t c_pid = fork();
 	if (c_pid == 0) {
