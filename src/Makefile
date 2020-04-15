@@ -9,7 +9,7 @@ VELIB_OBJ := init_hook.o ve_urpc.o urpc_common.o memory.o
 
 LIBS := $(addprefix $(BLIB)/,liburpcVH.so liburpcVE.so liburpcVE_omp.so \
   liburpcVH.a liburpcVE.a liburpcVE_omp.a)
-INCLUDES := urpc.h urpc_debug.h urpc_time.h
+INCLUDES := $(addprefix $(BINC)/,urpc.h urpc_debug.h urpc_time.h)
 
 VHLIB_OBJS := $(addprefix $(BVH)/,$(VHLIB_OBJ))
 VELIB_OBJS := $(addprefix $(BVE)/,$(VELIB_OBJ))
