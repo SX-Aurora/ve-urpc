@@ -40,7 +40,7 @@ ALL: $(LIBS) $(INCLUDES)
 %/init_hook_ve.o: init_hook.c urpc_common.h urpc.h
 
 
-install: $(LIBS) $(INCLUDES) | $(DEST)/lib/ $(DEST)/include/
+install: $(LIBS) $(INCLUDES) | $(PREF)$(DEST)/lib/ $(PREF)$(DEST)/include/
 	/usr/bin/install -t $(PREF)$(DEST)/lib $(LIBS)
 	/usr/bin/install -t $(PREF)$(DEST)/include $(INCLUDES)
 
