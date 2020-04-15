@@ -16,7 +16,7 @@ VELIB_OBJS := $(addprefix $(BVE)/,$(VELIB_OBJ))
 VELIB_OBJS_OMP := $(addprefix $(BVE_OMP)/,$(VELIB_OBJ))
 
 
-ALL: $(LIBS)
+ALL: $(LIBS) $(INCLUDES)
 
 
 .PRECIOUS: $(BUILD)/ $(BUILD)%/ $(DEST)/ $(DEST)%/
@@ -40,12 +40,15 @@ ALL: $(LIBS)
 %/init_hook_ve.o: init_hook.c urpc_common.h urpc.h
 
 
-install: $(LIBS) | $(DEST)/lib/ $(DEST)/include/
+install: $(LIBS) $(INCLUDES) | $(DEST)/lib/ $(DEST)/include/
 	/usr/bin/install -t $(DEST)/lib $(LIBS)
 	/usr/bin/install -t $(DEST)/include $(INCLUDES)
 
 
 .SECONDEXPANSION:
+
+$(BINC)/%.h: %.h | $$(@D)/
+	/usr/bin/install -t $(BINC) $<
 
 $(BLIB)/liburpcVH.so: $(VHLIB_OBJS) | $$(@D)/
 	$(GCC) $(GCCFLAGS) -fpic -shared -o $@ $^
