@@ -24,8 +24,8 @@ ALL: $(TESTS)
 
 # install
 
-install: $(TESTS) | $(DEST)/tests/
-	cp -p $(TESTS) $(DEST)/tests
+install: $(TESTS) | $(PREF)$(DEST)/tests/
+	cp -p $(TESTS) $(PREF)$(DEST)/tests
 
 
 .PRECIOUS: $(BUILD)/ $(BUILD)%/ $(DEST)/ $(DEST)%/
