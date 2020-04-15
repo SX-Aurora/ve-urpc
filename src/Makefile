@@ -41,8 +41,8 @@ ALL: $(LIBS) $(INCLUDES)
 
 
 install: $(LIBS) $(INCLUDES) | $(DEST)/lib/ $(DEST)/include/
-	/usr/bin/install -t $(DEST)/lib $(LIBS)
-	/usr/bin/install -t $(DEST)/include $(INCLUDES)
+	/usr/bin/install -t $(PREF)$(DEST)/lib $(LIBS)
+	/usr/bin/install -t $(PREF)$(DEST)/include $(INCLUDES)
 
 
 .SECONDEXPANSION:

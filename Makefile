@@ -11,8 +11,8 @@ test:
 	make -C test DEST=$(DEST) BUILD=$(BUILD)
 
 install:
-	make -C src install DEST=$(DEST) BUILD=$(BUILD)
-	make -C test install DEST=$(DEST) BUILD=$(BUILD)
+	make -C src install DEST=$(DEST) BUILD=$(BUILD) PREF=$(PREF)
+	make -C test install DEST=$(DEST) BUILD=$(BUILD) PREF=$(PREF)
 
 clean:
 	make -C src clean
