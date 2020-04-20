@@ -30,5 +30,6 @@ SET_TARGET_PROPERTIES(urpcVH_static PROPERTIES OUTPUT_NAME urpcVH)
 ADD_SUBDIRECTORY(ve)
 
 ## Install --------------------------------------------------------------------
+INSTALL(TARGETS urpcVH urpcVH_static DESTINATION lib)
 INSTALL(TARGETS urpcVH urpcVH_static LIBRARY DESTINATION lib)
 INSTALL(FILES ${HEADER} DESTINATION include)
