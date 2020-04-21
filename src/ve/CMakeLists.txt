@@ -4,7 +4,11 @@ SET(CMAKE_CXX_COMPILER		/opt/nec/ve/bin/nc++)
 SET(CMAKE_AR				/opt/nec/ve/bin/nar)
 
 SET_DIRECTORY_PROPERTIES	(PROPERTIES COMPILE_OPTIONS "")
+<<<<<<< HEAD
 ADD_COMPILE_OPTIONS			(-fdiag-inline=0 -fdiag-parallel=0 -fdiag-vector=0 -finline -finline-functions)
+=======
+ADD_COMPILE_OPTIONS			(-fdiag-inline=0 -fdiag-parallel=0 -fdiag-vector=0 -O4)
+>>>>>>> 09597afe14b0e32da09bbef63f40cc69a6e580e7
 
 ADD_LIBRARY				(urpcVE SHARED ${VE_SRC})
 TARGET_LINK_OPTIONS		(urpcVE PRIVATE -pthread)
