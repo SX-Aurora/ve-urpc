@@ -69,7 +69,7 @@ urpc_peer_t *vh_urpc_peer_create(void)
 	memset(up, 0, sizeof(up));
 
 	/* TODO: make key VE and core specific to avoid duplicate use of UDMA */
-	up->shm_key = getpid() * URPC_MAX_PEERS + _urpc_num_peers;
+	up->shm_key = IPC_PRIVATE;
 	up->shm_size = 2 * URPC_BUFF_LEN;
 	/*
 	 * Allocate shared memory segment

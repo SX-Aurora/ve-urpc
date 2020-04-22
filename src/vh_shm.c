@@ -19,8 +19,7 @@ int _vh_shm_init(int key, size_t size, void **local_addr)
 	int err = 0;
 	struct shmid_ds ds;
 
-	int segid = shmget(key, size,
-				IPC_CREAT | SHM_HUGETLB | IPC_EXCL | S_IRWXU);
+	int segid = shmget(key, size, SHM_HUGETLB | S_IRWXU);
 	if (segid == -1) {
 		eprintf("[vh_shm_init] shmget failed: %s\n", strerror(errno));
 		return -errno;
