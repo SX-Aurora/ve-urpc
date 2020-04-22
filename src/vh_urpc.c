@@ -69,7 +69,7 @@ urpc_peer_t *vh_urpc_peer_create(void)
 	memset(up, 0, sizeof(up));
 
 	/* TODO: make key VE and core specific to avoid duplicate use of UDMA */
-	up->shm_key = getpid() * URPC_MAX_PEERS + _urpc_num_peers;
+	up->shm_key = IPC_PRIVATE;
 	up->shm_size = 2 * URPC_BUFF_LEN;
 	/*
 	 * Allocate shared memory segment
@@ -201,15 +201,16 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 		if (err) {
 			perror("ERROR: execve");
 			_exit(errno);
-		} else if (c_pid > 0) {
-			// this is the parent
-			free(args);
-			up->child_pid = c_pid;
-		} else {
-			// this is an error
-			perror("ERROR vh_urpc_child_create");
-			return -errno;
 		}
+		/* Not Reached */
+	}  else if (c_pid > 0) {
+		// this is the parent
+		free(args);
+		up->child_pid = c_pid;
+	} else {
+		// this is an error
+		perror("ERROR vh_urpc_child_create");
+		return -errno;
 	}
 	return 0;
 }
