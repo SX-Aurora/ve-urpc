@@ -201,15 +201,16 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 		if (err) {
 			perror("ERROR: execve");
 			_exit(errno);
-		} else if (c_pid > 0) {
-			// this is the parent
-			free(args);
-			up->child_pid = c_pid;
-		} else {
-			// this is an error
-			perror("ERROR vh_urpc_child_create");
-			return -errno;
 		}
+		/* Not Reached */
+	}  else if (c_pid > 0) {
+		// this is the parent
+		free(args);
+		up->child_pid = c_pid;
+	} else {
+		// this is an error
+		perror("ERROR vh_urpc_child_create");
+		return -errno;
 	}
 	return 0;
 }
