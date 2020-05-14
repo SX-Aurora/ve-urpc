@@ -34,6 +34,7 @@
 #define URPC_TIMEOUT_US (10 * 1000000)
 #define URPC_ALLOC_TIMEOUT_US (60 * 1000000)
 
+#define ALIGN4B(x) (((uint64_t)(x) + 3UL) & ~3UL)
 #define ALIGN8B(x) (((uint64_t)(x) + 7UL) & ~7UL)
 #define REQ2SLOT(r) (int32_t)((r) & (URPC_LEN_MB - 1))
 
