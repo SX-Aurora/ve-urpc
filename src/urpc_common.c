@@ -452,7 +452,7 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
        if (size) {
                rc = ve_transfer_data_sync(uc->shm_data_vehva + mb.c.offs,
                                           uc->mirr_data_vehva + mb.c.offs,
-                                          (size_t)(pp - payload));
+                                          (size_t)ALIGN8B(pp - payload));
                if (rc) {
                        eprintf("[VE ERROR] ve_dma_post_wait send failed: %x\n", rc);
                         //pthread_mutex_unlock(&uc->lock);
