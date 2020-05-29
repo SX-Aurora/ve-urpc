@@ -209,7 +209,7 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 			_exit(errno);
 		}
 		/* Not Reached */
-	}  else if (c_pid > 0) {
+	} else if (c_pid > 0) {
 		// this is the parent
 		free(args);
 		up->child_pid = c_pid;
