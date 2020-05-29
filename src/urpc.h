@@ -13,7 +13,7 @@
 #define URPC_MAX_PEERS (8 * MAX_VE_CORES)
 /* the length of the mailbox MUST be a power of 2! */
 #define URPC_LEN_MB    256
-#define URPC_BUFF_LEN (64 * 1024 * 1024)
+#define URPC_BUFF_LEN (32 * 1024 * 1024)
 #define URPC_CMD_BITS (8)
 
 #define URPC_MAX_HANDLERS ((1 << URPC_CMD_BITS) - 1)
