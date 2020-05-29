@@ -8,7 +8,7 @@
 #include <string.h>
 #include <pthread.h>
 
-#define MAX_VE_CORES   8
+#define MAX_VE_CORES   10
 /* maximum number of peer currently limited to 80 = 8 VEs * 10 cores */
 #define URPC_MAX_PEERS (8 * MAX_VE_CORES)
 /* the length of the mailbox MUST be a power of 2! */
