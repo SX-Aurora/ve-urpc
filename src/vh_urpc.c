@@ -230,7 +230,7 @@ int vh_urpc_child_destroy(urpc_peer_t *up)
 		printf("Sending SIGKILL to child");
 		rc = kill(up->child_pid, SIGKILL);
 		waitpid(up->child_pid, &status, 0);
-		dprintf("waitpid(%d) returned status=%d\n", status);
+		dprintf("waitpid(%d) returned status=%d\n", up->child_pid, status);
 		up->child_pid = -1;
 	}
 	return rc;
