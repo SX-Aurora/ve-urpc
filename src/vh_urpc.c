@@ -75,7 +75,7 @@ urpc_peer_t *vh_urpc_peer_create(void)
 	 * Allocate shared memory segment
 	 */
 	up->shm_segid = _vh_shm_init(up->shm_key, up->shm_size, &up->shm_addr);
-	if (up->shm_segid == -1) {
+	if (up->shm_segid < 0) {
 		rc = _vh_shm_fini(up->shm_segid, up->shm_addr);
 		errno = -ENOMEM;
 		return NULL;
