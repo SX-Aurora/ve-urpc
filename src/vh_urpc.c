@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <time.h>
-
+#include <sys/prctl.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
@@ -180,11 +180,17 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 		}
 	}
 #endif
-
+	pid_t p_pid = getpid();
 	pid_t c_pid = fork();
 	if (c_pid == 0) {
 		// this is the child
-
+		err = prctl(PR_SET_PDEATHSIG, SIGTERM);
+		if (err == -1) { 
+			perror("ERROR: prctl");
+			_exit(errno);
+		 }
+		if (getppid() != p_pid)
+			exit(1);
 		// set env vars
 		char tmp[16];
 		sprintf(tmp, "%d", up->shm_segid);
