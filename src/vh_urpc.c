@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <time.h>
-
+#include <sys/prctl.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
@@ -75,7 +75,7 @@ urpc_peer_t *vh_urpc_peer_create(void)
 	 * Allocate shared memory segment
 	 */
 	up->shm_segid = _vh_shm_init(up->shm_key, up->shm_size, &up->shm_addr);
-	if (up->shm_segid == -1) {
+	if (up->shm_segid < 0) {
 		rc = _vh_shm_fini(up->shm_segid, up->shm_addr);
 		errno = -ENOMEM;
 		return NULL;
@@ -180,11 +180,17 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 		}
 	}
 #endif
-
+	pid_t p_pid = getpid();
 	pid_t c_pid = fork();
 	if (c_pid == 0) {
 		// this is the child
-
+		err = prctl(PR_SET_PDEATHSIG, SIGTERM);
+		if (err == -1) { 
+			perror("ERROR: prctl");
+			_exit(errno);
+		 }
+		if (getppid() != p_pid)
+			exit(1);
 		// set env vars
 		char tmp[16];
 		sprintf(tmp, "%d", up->shm_segid);
@@ -203,7 +209,7 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 			_exit(errno);
 		}
 		/* Not Reached */
-	}  else if (c_pid > 0) {
+	} else if (c_pid > 0) {
 		// this is the parent
 		free(args);
 		up->child_pid = c_pid;
@@ -224,7 +230,7 @@ int vh_urpc_child_destroy(urpc_peer_t *up)
 		printf("Sending SIGKILL to child");
 		rc = kill(up->child_pid, SIGKILL);
 		waitpid(up->child_pid, &status, 0);
-		dprintf("waitpid(%d) returned status=%d\n", status);
+		dprintf("waitpid(%d) returned status=%d\n", up->child_pid, status);
 		up->child_pid = -1;
 	}
 	return rc;

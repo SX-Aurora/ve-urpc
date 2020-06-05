@@ -12,5 +12,6 @@ BVE = $(BUILD)/ve
 BVE_OMP = $(BUILD)/ve_omp
 BVH = $(BUILD)/vh
 BB  = $(BUILD)/bin
-BLIB = $(BUILD)/lib
+BVELIB = $(BUILD)/lib
+BLIB = $(BUILD)/lib64
 BINC = $(BUILD)/include

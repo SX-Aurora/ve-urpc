@@ -80,7 +80,7 @@ int vh_shm_wait_peers(int segid)
 			break;
                 if (timediff_us(ts) > 50000000) {
 			rc = -1;
-			perror("vh_shm_wait_peers] Timeout while waiting for peer.");
+			perror("[vh_shm_wait_peers] Timeout while waiting for peer.");
 			break;
 		}
 	}

@@ -5,7 +5,7 @@ include ../make.inc
 
 NCCFLAGS := $(NCCFLAGS) -I../src
 GCCFLAGS := $(GCCFLAGS) -I../src
-LDFLAGS = -Wl,-rpath,$(abspath $(DEST)/lib) -Wl,-rpath,$(abspath $(BLIB)) -Wl,-rpath,.
+LDFLAGS = -Wl,-rpath,$(abspath $(DEST)/lib64) -Wl,-rpath,$(abspath $(BLIB)) -Wl,-rpath,$(abspath $(BVELIB)) -Wl,-rpath,.
 
 TESTS = $(BB)/ping_vh $(BB)/pong_ve
 
@@ -36,10 +36,10 @@ install: $(TESTS) | $(PREF)$(DEST)/tests/
 .SECONDEXPANSION:
 
 $(BB)/ping_vh: $(BVH)/ping_vh.o $(BVH)/pingpong.o | $$(@D)/
-	$(GCC) $(GCCFLAGS) $(LDFLAGS) -o $@ $^ -L$(BLIB) -lurpcVH
+	$(GCC) $(GCCFLAGS) $(LDFLAGS) -o $@ $^ -L$(BLIB) -L$(BVELIB) -lurpcVH
 
 $(BB)/pong_ve: $(BVE)/pong_ve.o $(BVE)/pingpong.o | $$(@D)/
-	$(NCC) $(NCCFLAGS) $(LDFLAGS) -o $@ $^ -L$(BLIB) -lurpcVE -lveio -lpthread
+	$(NCC) $(NCCFLAGS) $(LDFLAGS) -o $@ $^ -L$(BLIB) -L$(BVELIB) -lurpcVE -lveio -lpthread -lveftrace
 
 
 $(BVH)/%.o: %.c pingpong.h | $$(@D)/
