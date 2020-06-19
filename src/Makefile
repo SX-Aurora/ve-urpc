@@ -7,9 +7,10 @@ include ../make.inc
 VHLIB_OBJ := init_hook.o vh_shm.o vh_urpc.o urpc_common.o memory.o
 VELIB_OBJ := init_hook.o ve_urpc.o urpc_common.o memory.o
 
-LIBS := $(addprefix $(BLIB)/,liburpcVH.so liburpcVH.a )
-VELIBS := $(addprefix $(BVELIB)/,liburpcVE.so liburpcVE_omp.so \
-  liburpcVE.a liburpcVE_omp.a)
+LIBS := $(addprefix $(BLIB)/,liburpcVH.so )
+ARCS := $(addprefix $(BLIB)/,liburpcVH.a )
+VELIBS := $(addprefix $(BVELIB)/,liburpcVE.so liburpcVE_omp.so)
+VEARCS := $(addprefix $(BVELIB)/,liburpcVE.a liburpcVE_omp.a)
 INCLUDES := $(addprefix $(BINC)/,urpc.h urpc_debug.h urpc_time.h)
 
 VHLIB_OBJS := $(addprefix $(BVH)/,$(VHLIB_OBJ))
@@ -17,10 +18,10 @@ VELIB_OBJS := $(addprefix $(BVE)/,$(VELIB_OBJ))
 VELIB_OBJS_OMP := $(addprefix $(BVE_OMP)/,$(VELIB_OBJ))
 
 
-ALL: $(LIBS) $(VELIBS) $(INCLUDES)
+ALL: $(LIBS) $(ARCS) $(VELIBS) $(VEARCS) $(INCLUDES)
 
 
-.PRECIOUS: $(BUILD)/ $(BUILD)%/ $(DEST)/ $(DEST)%/
+.PRECIOUS: $(BUILD)/ $(BUILD)%/ $(DEST)/ $(DEST)%/ $(VEDEST)/ $(VEDEST)%/
 
 %/:
 	mkdir -p $@
@@ -32,7 +33,6 @@ ALL: $(LIBS) $(VELIBS) $(INCLUDES)
 %/urpc_common_vh.o: urpc_common.c urpc_common.h urpc.h urpc_time.h
 %/init_hook_vh.o: init_hook.c urpc_common.h urpc.h
 
-
 #  VE objects below
 
 %/ve_urpc.o: ve_urpc.c urpc_common.h urpc.h urpc_time.h ve_inst.h
@@ -41,10 +41,12 @@ ALL: $(LIBS) $(VELIBS) $(INCLUDES)
 %/init_hook_ve.o: init_hook.c urpc_common.h urpc.h
 
 
-install: $(LIBS) $(VELIBS) $(INCLUDES) | $(PREF)$(DEST)/lib64/ $(PREF)$(DEST)/lib/ $(PREF)$(DEST)/include/
+install: $(LIBS) $(VELIBS) $(VELIBS) $(VEARCS) $(INCLUDES) | $(PREF)$(DEST)/lib64/ $(PREF)$(VEDEST)/lib/ $(PREF)$(DEST)/include/
 	/usr/bin/install -t $(PREF)$(DEST)/lib64 $(LIBS)
-	/usr/bin/install -t $(PREF)$(DEST)/lib $(VELIBS)
-	/usr/bin/install -t $(PREF)$(DEST)/include $(INCLUDES)
+	/usr/bin/install -t $(PREF)$(DEST)/lib64 -m 0644 $(ARCS)
+	/usr/bin/install -t $(PREF)$(VEDEST)/lib $(VELIBS)
+	/usr/bin/install -t $(PREF)$(VEDEST)/lib -m 0644 $(VEARCS)
+	/usr/bin/install -t $(PREF)$(DEST)/include -m 0644 $(INCLUDES)
 
 
 .SECONDEXPANSION:
