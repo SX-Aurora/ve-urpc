@@ -18,8 +18,11 @@ VELIB_OBJS := $(addprefix $(BVE)/,$(VELIB_OBJ))
 VELIB_OBJS_OMP := $(addprefix $(BVE_OMP)/,$(VELIB_OBJ))
 
 
-ALL: $(LIBS) $(ARCS) $(VELIBS) $(VEARCS) $(INCLUDES)
+ALL: all-ve all-vh
 
+all-ve: $(VELIBS) $(VEARCS) $(INCLUDES)
+
+all-vh: $(LIBS) $(ARCS) $(INCLUDES)
 
 .PRECIOUS: $(BUILD)/ $(BUILD)%/ $(DEST)/ $(DEST)%/ $(VEDEST)/ $(VEDEST)%/
 
@@ -40,14 +43,16 @@ ALL: $(LIBS) $(ARCS) $(VELIBS) $(VEARCS) $(INCLUDES)
 %/urpc_common_ve.o: urpc_common.c urpc_common.h urpc.h urpc_time.h
 %/init_hook_ve.o: init_hook.c urpc_common.h urpc.h
 
+install: install-ve install-vh
 
-install: $(LIBS) $(VELIBS) $(VELIBS) $(VEARCS) $(INCLUDES) | $(PREF)$(DEST)/lib64/ $(PREF)$(VEDEST)/lib/ $(PREF)$(DEST)/include/
-	/usr/bin/install -t $(PREF)$(DEST)/lib64 $(LIBS)
-	/usr/bin/install -t $(PREF)$(DEST)/lib64 -m 0644 $(ARCS)
+install-ve: $(VELIBS) $(VELIBS) $(VEARCS) | $(PREF)$(VEDEST)/lib/
 	/usr/bin/install -t $(PREF)$(VEDEST)/lib $(VELIBS)
 	/usr/bin/install -t $(PREF)$(VEDEST)/lib -m 0644 $(VEARCS)
-	/usr/bin/install -t $(PREF)$(DEST)/include -m 0644 $(INCLUDES)
 
+install-vh: $(LIBS) $(ARCS) $(INCLUDES) | $(PREF)$(DEST)/lib64/ $(PREF)$(DEST)/include/
+	/usr/bin/install -t $(PREF)$(DEST)/lib64 $(LIBS)
+	/usr/bin/install -t $(PREF)$(DEST)/lib64 -m 0644 $(ARCS)
+	/usr/bin/install -t $(PREF)$(DEST)/include -m 0644 $(INCLUDES)
 
 .SECONDEXPANSION:
 
