@@ -16,7 +16,7 @@
 int urpc_wait_peer_attach(urpc_peer_t *up)
 {
 #ifndef __ve__
-	return vh_shm_wait_peers(up->shm_segid);
+	return vh_shm_wait_peers(up->child_pid, up->shm_segid);
 #endif
 }
 

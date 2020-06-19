@@ -10,9 +10,11 @@
 #include <sys/prctl.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
+#include <sys/mman.h>
 #include <sys/shm.h>
 #include <sys/stat.h>
 #include <wait.h>
+#include <semaphore.h>
 #include <signal.h>
 
 #include "vh_shm.h"
@@ -180,6 +182,16 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 		}
 	}
 #endif
+
+	size_t pagesize = sysconf(_SC_PAGE_SIZE);
+	sem_t *sem = mmap(NULL, pagesize, PROT_READ | PROT_WRITE,
+			  MAP_ANONYMOUS | MAP_SHARED,
+			 -1, 0);
+	if (sem == MAP_FAILED) {
+		perror("ERROR: mmap");
+		return -ENOMEM;
+	}
+	sem_init(sem, 1, 0);
 	pid_t p_pid = getpid();
 	pid_t c_pid = fork();
 	if (c_pid == 0) {
@@ -191,6 +203,10 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 		 }
 		if (getppid() != p_pid)
 			exit(1);
+
+		shmdt(up->shm_addr);
+		sem_post(sem);
+
 		// set env vars
 		char tmp[16];
 		sprintf(tmp, "%d", up->shm_segid);
@@ -212,6 +228,9 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 	} else if (c_pid > 0) {
 		// this is the parent
 		free(args);
+		sem_wait(sem);
+		sem_destroy(sem);
+		munmap(sem, pagesize);
 		up->child_pid = c_pid;
 	} else {
 		// this is an error

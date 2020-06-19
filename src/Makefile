@@ -53,7 +53,7 @@ $(BINC)/%.h: %.h | $$(@D)/
 	/usr/bin/install -t $(BINC) $<
 
 $(BLIB)/liburpcVH.so: $(VHLIB_OBJS) | $$(@D)/
-	$(GCC) $(GCCFLAGS) -fpic -shared -o $@ $^
+	$(GCC) $(GCCFLAGS) -fpic -shared -lpthread -o $@ $^
 #	$(GCC) $(GCCFLAGS) -fpic -Wl,--version-script=liburpc_vh.map -shared -o $@ $^
 
 $(BVELIB)/liburpcVE.so: $(VELIB_OBJS) | $$(@D)/
