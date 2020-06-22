@@ -7,6 +7,7 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 #include "urpc_debug.h"
 #include "urpc_time.h"
@@ -65,13 +66,16 @@ int _vh_shm_fini(int segid, void *local_addr)
 	return err;
 }
 
-int vh_shm_wait_peers(int segid)
+int vh_shm_wait_peers(pid_t pid, int segid)
 {
 	struct shmid_ds ds;
         long ts = get_time_us();
         int rc = 0;
 
 	for (;;) {
+		int ret = waitpid(pid, 0, WNOHANG);
+		if (ret != 0)
+			return -1;
 		if (-1 == (shmctl(segid, IPC_STAT, &ds))) {
 			perror("[vh_shm_wait_peers] Failed shmctl IPC_STAT");
 			return -1;

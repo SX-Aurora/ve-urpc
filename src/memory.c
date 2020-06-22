@@ -147,6 +147,10 @@ gc_out:
  */
 uint64_t alloc_payload(urpc_comm_t *uc, uint32_t size)
 {
+	if (size > DATA_BUFF_END) {
+		eprintf("ERROR: data size(%d) exceeds DATA_BUFF_END(%d)\n",size, DATA_BUFF_END);
+		return 0;
+	}
 	urpc_mb_t res;
 	uint32_t asize = ALIGN8B(size);
         long ts = get_time_us();
