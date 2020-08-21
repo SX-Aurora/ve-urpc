@@ -19,6 +19,7 @@ int _vh_shm_init(int key, size_t size, void **local_addr)
 {
 	int err = 0;
 	struct shmid_ds ds;
+	int shmat_errno = 0;
 
 	int segid = shmget(key, size, SHM_HUGETLB | S_IRWXU);
 	if (segid == -1) {
@@ -28,10 +29,18 @@ int _vh_shm_init(int key, size_t size, void **local_addr)
 	*local_addr = shmat(segid, NULL, 0);
 	dprintf("[vh_shm_init] shm seg local_addr: %p\n", *local_addr);
 	if (*local_addr == (void *) -1) {
+		shmat_errno = errno;
 		eprintf("[vh_shm_init] shmat failed: %s. "
 			"Releasing shm segment. key=%d\n", strerror(errno), key);
 		shmctl(segid, IPC_RMID, NULL);
-		segid = -errno;
+		return -shmat_errno;
+	}
+
+	if (-1 == (shmctl(segid, IPC_STAT, &ds)))
+		perror("[vh_shm_init] Failed shmctl IPC_STAT");
+	err = shmctl(segid, IPC_RMID, &ds);
+	if (err < 0){
+		printf("[vh_shm_init] Failed to mark SHM seg ID %d destroyed\n", segid);
 	}
 	return segid;
 }
@@ -88,6 +97,5 @@ int vh_shm_wait_peers(pid_t pid, int segid)
 			break;
 		}
 	}
-	_vh_shm_destroy(segid);
 	return rc;
 }
