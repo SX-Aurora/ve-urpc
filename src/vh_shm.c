@@ -12,6 +12,18 @@
 #include "urpc_debug.h"
 #include "urpc_time.h"
 
+static void _vh_shm_destroy(int segid)
+{
+	int err = 0;
+	struct shmid_ds ds;
+
+	if (-1 == (shmctl(segid, IPC_STAT, &ds)))
+		perror("[vh_shm_destroy] Failed shmctl IPC_STAT");
+	err = shmctl(segid, IPC_RMID, &ds);
+	if (err < 0)
+		printf("[vh_shm_destroy] Failed to mark SHM seg ID %d destroyed\n", segid);
+}
+
 /*
   Returns: the segment ID of the shm segment.
  */
@@ -35,26 +47,8 @@ int _vh_shm_init(int key, size_t size, void **local_addr)
 		shmctl(segid, IPC_RMID, NULL);
 		return -shmat_errno;
 	}
-
-	if (-1 == (shmctl(segid, IPC_STAT, &ds)))
-		perror("[vh_shm_init] Failed shmctl IPC_STAT");
-	err = shmctl(segid, IPC_RMID, &ds);
-	if (err < 0){
-		printf("[vh_shm_init] Failed to mark SHM seg ID %d destroyed\n", segid);
-	}
+        _vh_shm_destroy(segid);
 	return segid;
-}
-
-static void _vh_shm_destroy(int segid)
-{
-	int err = 0;
-	struct shmid_ds ds;
-
-	if (-1 == (shmctl(segid, IPC_STAT, &ds)))
-		perror("[vh_shm_destroy] Failed shmctl IPC_STAT");
-	err = shmctl(segid, IPC_RMID, &ds);
-	if (err < 0)
-		printf("[vh_shm_destroy] Failed to mark SHM seg ID %d destroyed\n", segid);
 }
 
 int _vh_shm_fini(int segid, void *local_addr)
