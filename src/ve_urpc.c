@@ -241,8 +241,8 @@ void ve_urpc_fini(urpc_peer_t *up)
 	int err;
 
         // mark this side as exited.
-        urpc_set_recv_flags(&up->recv, urpc_get_recv_flags(&up->recv) | URPC_FLAG_EXITED);
-        urpc_set_send_flags(&up->send, urpc_get_send_flags(&up->send) | URPC_FLAG_EXITED);
+        urpc_set_receiver_flags(&up->recv, urpc_get_receiver_flags(&up->recv) | URPC_FLAG_EXITED);
+        urpc_set_sender_flags(&up->send, urpc_get_sender_flags(&up->send) | URPC_FLAG_EXITED);
 
 	// unregister local buffer from DMAATB
 	err = ve_unregister_mem_from_dmaatb(up->recv.mirr_data_vehva -
