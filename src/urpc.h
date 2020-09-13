@@ -38,6 +38,12 @@
 #define ALIGN8B(x) (((uint64_t)(x) + 7UL) & ~7UL)
 #define REQ2SLOT(r) (int32_t)((r) & (URPC_LEN_MB - 1))
 
+//
+// Sender and receiver flags
+//
+#define URPC_FLAG_SLEEPING  1
+#define URPC_FLAG_EXCEPTION 2
+#define URPC_FLAG_EXITED    4
 
 #ifdef __cplusplus
 extern "C" {
