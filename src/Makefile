@@ -91,5 +91,6 @@ $(BVE)/%.o: %.c | $$(@D)/
 
 
 clean:
-	rm -f $(VHLIB_OBJS) $(VELIB_OBJS) $(VELIB_OBJS_OMP) $(LIBS) $(VELIBS)
+	rm -f $(VHLIB_OBJS) $(VELIB_OBJS) $(VELIB_OBJS_OMP) $(LIBS) \
+		$(VELIBS) $(VEARCS) $(ARCS) $(INCLUDES)
 
