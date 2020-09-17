@@ -69,4 +69,10 @@ $(BVE)/%.o: %.c pingpong.h | $$(@D)/
 
 
 clean:
-	rm -f $(TESTS)
+	rm -f $(TESTS) \
+		$(BVH)/ping_vh.o $(BVH)/pingpong.o \
+		$(BVE)/pong_ve.o $(BVE)/pingpong.o \
+		$(BVH)/send_vh.o $(BVH)/sendrecv.o \
+		$(BVH)/send_vh_e.o $(BVH)/sendrecv.o \
+		$(BVH)/send_vh_t.o $(BVH)/sendrecv.o \
+		$(BVE)/recv_ve.o $(BVE)/sendrecv.o
