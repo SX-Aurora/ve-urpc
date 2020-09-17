@@ -68,7 +68,7 @@ urpc_peer_t *vh_urpc_peer_create(void)
 		errno = -ENOMEM;
 		return NULL;
 	}
-	memset(up, 0, sizeof(up));
+	memset(up, 0, sizeof(urpc_peer_t));
 
 	/* TODO: make key VE and core specific to avoid duplicate use of UDMA */
 	up->shm_key = IPC_PRIVATE;
