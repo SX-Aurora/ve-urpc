@@ -23,6 +23,7 @@
 
 static int _urpc_num_peers = 0;
 static struct sigaction __reaper_sa = {0};
+extern char** environ;
 
 
 static void vh_urpc_comm_init(urpc_comm_t *uc)
@@ -156,7 +157,7 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 	char *argv[maxargs];
 
 	// exec binary
-	extern char** environ;
+	char** env = environ;
 	char *e;
 	e = getenv("URPC_VE_BIN");
 	if (!e)
@@ -219,7 +220,7 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 			setenv("URPC_VE_CORE", tmp, 1);
 		}
 
-		err = execve(argv[0], argv, environ);
+		err = execve(argv[0], argv, env);
 		if (err) {
 			perror("ERROR: execve");
 			_exit(errno);
