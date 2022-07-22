@@ -216,6 +216,7 @@ void ve_urpc_unpin(void);
 void ve_urpc_fini(urpc_peer_t *up);
 int ve_urpc_recv_progress(urpc_peer_t *up, int ncmds);
 int ve_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us);
+void ve_prev_sent_payload(urpc_peer_t *up, void **payload, size_t *plen);
 
 # else
 
