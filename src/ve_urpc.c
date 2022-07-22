@@ -371,7 +371,7 @@ int ve_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us)
 }
 
 /*
-  Get last sent payload
+  Get the previous request's sent payload (AKA result)
 */
 void ve_prev_sent_payload(urpc_peer_t *up, void **payload, size_t *plen)
 {
