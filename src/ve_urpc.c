@@ -373,12 +373,12 @@ int ve_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us)
 /*
   Get the previous request's sent payload (AKA result)
 */
-void ve_prev_sent_payload(urpc_peer_t *up, void **payload, size_t *plen)
+void ve_prev_sent_payload(urpc_peer_t *up, int offs, void **payload, size_t *plen)
 {
 	urpc_mb_t m;
 	urpc_comm_t *uc = &(up->send);
 	transfer_queue_t *tq = uc->tq;
-        int64_t req = TQ_READ64(tq->last_put_req) - 1;
+        int64_t req = TQ_READ64(tq->last_put_req) - offs;
 	int slot = REQ2SLOT(req);
         m.u64 = TQ_READ64(tq->mb[slot].u64);
 	*payload = (void *)((char *)uc->mirr_data_buff + m.c.offs);
