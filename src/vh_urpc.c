@@ -37,11 +37,11 @@
 #include <wait.h>
 #include <semaphore.h>
 #include <signal.h>
+#include <stdarg.h>
 
 #include "vh_shm.h"
 #include "urpc_common.h"
 #include "urpc_time.h"
-
 static int _urpc_num_peers = 0;
 static struct sigaction __reaper_sa = {0};
 
@@ -161,6 +161,27 @@ static void handle_sigchld(int sig)
 }
 
 /*
+  Set environment variable VE_FTRACE_OUT_NAME.
+ */
+void set_ve_ftrace_out_name(int venode_id)
+{
+	uint64_t len = 1024;
+	char filename[len];
+	const char *mpiuniverse = getenv("MPIUNIVERSE");
+	const char *mpirank = getenv("MPIRANK");
+
+	if (mpiuniverse != NULL && mpirank != NULL) {
+		snprintf(filename, len, "%s.%s.%s.%s.%d.%d",
+			"ftrace.out", mpiuniverse, mpirank, "veo", venode_id, getpid());
+	} else {
+		snprintf(filename, len, "%s.%s.%d.%d",
+			"ftrace.out", "veo", venode_id, getpid());
+	}
+	dprintf("VE_FTRACE_OUT_NAME = %s\n", filename);
+	setenv("VE_FTRACE_OUT_NAME", filename, 1);
+}
+
+/*
   Create a child process running the binary in the args. Create appropriate
   environment vars for the child process and store the pid of the new process.
   This process is supposed to be the remote peer process running on a VE and
@@ -239,6 +260,9 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 			sprintf(tmp, "%d", ve_core);
 			setenv("URPC_VE_CORE", tmp, 1);
 		}
+
+		// Set environment variable VE_FTRACE_OUT_NAME
+		set_ve_ftrace_out_name(venode_id);
 
 		err = execve(argv[0], argv, environ);
 		if (err) {
