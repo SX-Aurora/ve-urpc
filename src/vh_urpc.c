@@ -46,7 +46,7 @@ static int _urpc_num_peers = 0;
 static struct sigaction __reaper_sa = {0};
 
 
-static void vh_urpc_comm_init(urpc_comm_t *uc)
+static void vh_urpc_comm_init(urpc_comm_t *uc, int64_t data_buff_end)
 {
 	for (int i = 0; i < URPC_LEN_MB; i++) {
 		uc->mlist[i].u64 = 0;
@@ -57,10 +57,11 @@ static void vh_urpc_comm_init(urpc_comm_t *uc)
 	TQ_WRITE64(uc->tq->last_put_req, -1);
 	TQ_WRITE64(uc->tq->last_get_req, -1);
 	uc->mem[0].begin = 0;
-	uc->mem[0].end = DATA_BUFF_END;
+	uc->mem[0].end = data_buff_end;
 	uc->mem[1].begin = 0;
 	uc->mem[1].end = 0;
 	uc->active = &uc->mem[0];
+	uc->data_buff_end = data_buff_end;
         pthread_mutex_init(&uc->lock, NULL);
 }
 
@@ -77,6 +78,18 @@ urpc_peer_t *vh_urpc_peer_create(void)
 	int rc = 0, i, peer_id;
 	char *env, *mb_offs = NULL;
 
+	uint64_t omp_num_threads = -1;
+	int64_t data_buff_end = 0, urpc_buff_len = 0;
+	const char *e_omp_num_threads = getenv("VE_OMP_NUM_THREADS");
+	if (e_omp_num_threads != NULL) {
+		omp_num_threads = atoi(e_omp_num_threads);
+	}
+	if (omp_num_threads != (uint64_t)-1) {
+		urpc_buff_len = omp_num_threads * URPC_BUFF_LEN_PER_THREADS;
+	} else {
+		urpc_buff_len = 4 * URPC_BUFF_LEN_PER_THREADS;
+	}
+
 	if (_urpc_num_peers == URPC_MAX_PEERS) {
 		eprintf("veo_urpc_peer_init: max number of urpc peers reached!\n");
 		errno = -ENOMEM;
@@ -91,9 +104,12 @@ urpc_peer_t *vh_urpc_peer_create(void)
 	}
 	memset(up, 0, sizeof(urpc_peer_t));
 
+	up->urpc_data_buff_len = urpc_buff_len - 8*(URPC_LEN_MB + 2);
+	data_buff_end = up->urpc_data_buff_len - 4096;
+
 	/* TODO: make key VE and core specific to avoid duplicate use of UDMA */
 	up->shm_key = IPC_PRIVATE;
-	up->shm_size = 2 * URPC_BUFF_LEN;
+	up->shm_size = 2 * urpc_buff_len;
 	/*
 	 * Allocate shared memory segment
 	 */
@@ -110,13 +126,13 @@ urpc_peer_t *vh_urpc_peer_create(void)
 	// Set up send communicator
 	//
 	up->send.tq = (transfer_queue_t *)up->shm_addr;
-	vh_urpc_comm_init(&up->send);
+	vh_urpc_comm_init(&up->send, data_buff_end);
 
     //
     // Set up recv communicator
     //
-    up->recv.tq = (transfer_queue_t *)(up->shm_addr + URPC_BUFF_LEN);
-	vh_urpc_comm_init(&up->recv);
+    up->recv.tq = (transfer_queue_t *)(up->shm_addr + urpc_buff_len);
+	vh_urpc_comm_init(&up->recv, data_buff_end);
 
         pthread_mutex_init(&up->lock, NULL);
 
@@ -264,6 +280,10 @@ int vh_urpc_child_create(urpc_peer_t *up, char *binary,
 		// Set environment variable VE_FTRACE_OUT_NAME
 		set_ve_ftrace_out_name(venode_id);
 
+		// Set buff length
+		sprintf(tmp, "%d", up->urpc_data_buff_len);
+		setenv("URPC_DATA_BUFF_LEN", tmp, 1);
+
 		err = execve(argv[0], argv, environ);
 		if (err) {
 			perror("ERROR: execve");
@@ -351,4 +371,8 @@ int vh_urpc_recv_progress_timeout(urpc_peer_t *up, int ncmds, long timeout_us)
 
 	} while (done_ts == 0 || timediff_us(done_ts) < timeout_us);
 
+}
+
+int64_t urpc_max_send_cmd_size(urpc_peer_t *up) {
+        return up->send.data_buff_end;
 }
