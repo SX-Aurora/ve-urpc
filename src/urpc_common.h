@@ -67,7 +67,6 @@ int ve_transfer_data_sync(uint64_t dst_vehva, uint64_t src_vehva, int len);
 int64_t urpc_get_cmd_timeout(transfer_queue_t *tq, urpc_mb_t *m, long timeout_us);
 void urpc_run_handler_init_hooks(urpc_peer_t *up);
 uint64_t alloc_payload(urpc_comm_t *uc, uint32_t size);
-
 #ifdef __cplusplus
 }
 #endif

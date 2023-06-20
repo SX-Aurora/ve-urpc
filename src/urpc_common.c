@@ -202,7 +202,7 @@ int64_t urpc_put_cmd(urpc_peer_t *up, urpc_mb_t *m)
 	mlist_t *ml = &uc->mlist[slot];
 	if (ml->b.len) {
 		for (int b = 0; b < 2; b++) {
-			if (uc->mem[b].end < DATA_BUFF_END) {
+			if (uc->mem[b].end < uc->data_buff_end) {
 				if (ml->b.offs == uc->mem[b].end) {
 					uc->mem[b].end += ALIGN8B(ml->b.len);
 					_report_free(uc, "[urpc_put_cmd]");
@@ -418,9 +418,9 @@ int64_t urpc_generic_send(urpc_peer_t *up, int cmd, char *fmt, ...)
 		mb.u64 = alloc_payload(uc, (uint32_t)size);
 		if (mb.u64 == 0) {
 			dprintf("generic_send: failed to allocate payload\n");
-			eprintf("ERROR: urpc_alloc_payload failed!");
+			dprintf("urpc_alloc_payload failed!\n");
                         //pthread_mutex_unlock(&uc->lock);
-			return -1;
+			return -EAGAIN;
 		}
 
 		// fill payload buffer

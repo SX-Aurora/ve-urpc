@@ -29,12 +29,12 @@
 #include <string.h>
 #include <pthread.h>
 
-#define MAX_VE_CORES   10
-/* maximum number of peer currently limited to 80 = 8 VEs * 10 cores */
+#define MAX_VE_CORES   18
+/* maximum number of peer currently limited to 128 = 8 VEs * 16 cores */
 #define URPC_MAX_PEERS (8 * MAX_VE_CORES)
 /* the length of the mailbox MUST be a power of 2! */
 #define URPC_LEN_MB    256
-#define URPC_BUFF_LEN (32 * 1024 * 1024)
+#define URPC_BUFF_LEN_PER_THREADS (4 * 1024 * 1024)
 #define URPC_CMD_BITS (8)
 
 #define URPC_MAX_HANDLERS ((1 << URPC_CMD_BITS) - 1)
@@ -44,12 +44,6 @@
 #define URPC_PAYLOAD_BITS (27)
 #define URPC_MAX_PAYLOAD (1 << URPC_PAYLOAD_BITS)
 #define URPC_OFFSET_BITS (29)
-#define URPC_DATA_BUFF_LEN (URPC_BUFF_LEN - 8*(URPC_LEN_MB + 2))
-
-//
-// Strangely, if we hit the boundary, DMA gets a memory protection exception
-//
-#define DATA_BUFF_END (URPC_DATA_BUFF_LEN - 4096)
 
 #define URPC_DELAY_PEEK 1
 #define URPC_TIMEOUT_US (10 * 1000000)
@@ -141,7 +135,7 @@ struct transfer_queue {
 	volatile int64_t last_put_req;
 	volatile int64_t last_get_req;
 	volatile urpc_mb_t mb[URPC_LEN_MB];
-	volatile uint64_t data[DATA_BUFF_END / sizeof(uint64_t)];
+	volatile uint64_t data[];
 };
 typedef struct transfer_queue transfer_queue_t;
 
@@ -173,6 +167,7 @@ struct urpc_comm {
 	uint64_t mirr_data_vehva;	// VEHVA address of VE mirror buffer to payload buffer
 	void *mirr_data_buff;		// virtual address of VE mirror buffer
 #endif
+	int64_t data_buff_end;
 };
 typedef struct urpc_comm urpc_comm_t;
 
@@ -206,6 +201,7 @@ struct urpc_peer {
 	pthread_mutex_t lock;
 	pid_t child_pid;
 	urpc_handler_func handler[256];
+	int urpc_data_buff_len;
 };
   
 #ifdef __ve__
@@ -246,7 +242,7 @@ void urpc_set_sender_flags(urpc_comm_t *uc, uint32_t flags);
 void urpc_slot_done(transfer_queue_t *tq, int slot, urpc_mb_t *m);
 int urpc_unpack_payload(void *payload, size_t psz, char *fmt, ...);
 int urpc_wait_peer_attach(urpc_peer_t *up);
-
+int64_t urpc_max_send_cmd_size(urpc_peer_t *up);
 #ifdef __cplusplus
 }
 #endif

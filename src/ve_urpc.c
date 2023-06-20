@@ -121,13 +121,14 @@ void ve_urpc_unpin(void)
 #endif
 }
 
-static void ve_urpc_comm_init(urpc_comm_t *uc)
+static void ve_urpc_comm_init(urpc_comm_t *uc, int64_t data_buff_end)
 {
 	uc->mem[0].begin = 0;
-	uc->mem[0].end = DATA_BUFF_END;
+	uc->mem[0].end = data_buff_end;
 	uc->mem[1].begin = 0;
 	uc->mem[1].end = 0;
 	uc->active = &uc->mem[0];
+	uc->data_buff_end = data_buff_end;
         pthread_mutex_init(&uc->lock, NULL);
 }
 
@@ -167,6 +168,20 @@ urpc_peer_t *ve_urpc_init(int segid)
 		}
 	}
 
+	int64_t urpc_data_buff_len = 0;
+	e = getenv("URPC_DATA_BUFF_LEN");
+	if (e) {
+		urpc_data_buff_len = atoi(e);
+	} else {
+		eprintf("env variable URPC_BUFF_LEN not found.\n");
+		free(up);
+		errno = ENOENT;
+		return NULL;
+	}
+	int64_t urpc_buff_len = urpc_data_buff_len + 8*(URPC_LEN_MB + 2);
+	int64_t data_buff_end = urpc_data_buff_len - 4096;
+	up->urpc_data_buff_len = urpc_data_buff_len;
+
 	// find and register shm segment
 	err = vhshm_register(up);
 	if (err) {
@@ -177,17 +192,17 @@ urpc_peer_t *ve_urpc_init(int segid)
 	}
 
 	up->recv.tq = (transfer_queue_t *)(up->shm_vehva);
-	up->send.tq = (transfer_queue_t *)(up->shm_vehva + URPC_BUFF_LEN);
+	up->send.tq = (transfer_queue_t *)(up->shm_vehva + urpc_buff_len);
         up->recv.shm_data_vehva = up->shm_vehva + offsetof(transfer_queue_t, data);
-        up->send.shm_data_vehva = up->shm_vehva + URPC_BUFF_LEN
+        up->send.shm_data_vehva = up->shm_vehva + urpc_buff_len
 		+ offsetof(transfer_queue_t, data);
 
-	ve_urpc_comm_init(&up->send);
+	ve_urpc_comm_init(&up->send, data_buff_end);
 
 	char *buff_base;
 	uint64_t buff_base_vehva;
 	size_t align_64mb = 64 * 1024 * 1024;
-	size_t buff_size = 2 * URPC_BUFF_LEN;
+	size_t buff_size = 2 * urpc_buff_len;
 	buff_size = (buff_size + align_64mb - 1) & ~(align_64mb - 1);
 
 	// allocate read and write buffers in one call
@@ -208,11 +223,11 @@ urpc_peer_t *ve_urpc_init(int segid)
 	dprintf("ve_register_mem_to_dmaatb succeeded for %p\n", buff_base);
 
 	up->recv.mirr_data_buff = buff_base + offsetof(transfer_queue_t, data);
-	up->send.mirr_data_buff = buff_base + URPC_BUFF_LEN
+	up->send.mirr_data_buff = buff_base + urpc_buff_len
 		+ offsetof(transfer_queue_t, data);
 	
 	up->recv.mirr_data_vehva = buff_base_vehva + offsetof(transfer_queue_t, data);
-	up->send.mirr_data_vehva = buff_base_vehva + URPC_BUFF_LEN
+	up->send.mirr_data_vehva = buff_base_vehva + urpc_buff_len
 		+ offsetof(transfer_queue_t, data);
 
         // initialize handler table

@@ -165,6 +165,7 @@ static inline int dhq_cmd_check_done(urpc_comm_t *uc, int is_recv)
  * @param uc urpc communicator
  * @param is_recv flag, true if reading/receiving from VH
  */
+#if 0
 static inline int dhq_dma_submit(urpc_comm_t *uc, int is_recv)
 {
 	int i, ncheck, rc, size, slot, start;
@@ -273,6 +274,7 @@ static inline int dhq_dma_submit(urpc_comm_t *uc, int is_recv)
 		is_recv ? "recv" : "send", dh->in, dh->submit, dh->done, dh->out);
 	return ncheck;
 }
+#endif
 
 /**
  * @brief Call handler on commands which have received their payload.

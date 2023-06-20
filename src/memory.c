@@ -55,7 +55,7 @@ static inline void _rebuild_free_blocks(urpc_comm_t *uc, uint64_t last_req, int 
 	int on_mb = 0;	// search on mailbox or on mlist
 	urpc_mb_t mb;
 	mlist_t *ml;
-	int abeg, aend, alen, obeg = DATA_BUFF_END + 1;
+	int abeg, aend, alen, obeg = uc->data_buff_end + 1;
 	int sw = 0;	// switch roles of free blocks after allocated region goes through 0
 	int count = 0;
 
@@ -67,7 +67,7 @@ static inline void _rebuild_free_blocks(urpc_comm_t *uc, uint64_t last_req, int 
 #endif
 	// initialize free block lists to max
 	uc->mem[0].begin = uc->mem[1].begin = 0;
-	uc->mem[0].end = uc->mem[1].end = DATA_BUFF_END;
+	uc->mem[0].end = uc->mem[1].end = uc->data_buff_end;
 
 	// loop down from start to mid
 	// in this area the request wasn't submitted, yet (except for the last one)
@@ -147,8 +147,8 @@ gc_out:
  */
 uint64_t alloc_payload(urpc_comm_t *uc, uint32_t size)
 {
-	if (size > DATA_BUFF_END) {
-		eprintf("ERROR: data size(%d) exceeds DATA_BUFF_END(%d)\n",size, DATA_BUFF_END);
+	if (size > uc->data_buff_end) {
+		eprintf("ERROR: data size(%d) exceeds DATA_BUFF_END(%d)\n",size, uc->data_buff_end);
 		return 0;
 	}
 	urpc_mb_t res;
@@ -166,10 +166,14 @@ uint64_t alloc_payload(urpc_comm_t *uc, uint32_t size)
 		uint32_t new_free = _gc_buffer(uc, asize);
 		if (new_free < asize) {
 			// TODO: delay, count, timeout
+#ifdef __ve__
 			if (timediff_us(ts) > URPC_ALLOC_TIMEOUT_US) {
-				eprintf("ERROR: alloc_payload timed out!\n");
+				eprintf("alloc_payload timed out!\n");
 				return 0;
 			}
+#else
+			return 0;
+#endif
 		} else {
 			break;
                 }
